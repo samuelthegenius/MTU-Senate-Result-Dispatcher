@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* MTU Brand Colors */
+  --color-mtu-green: #2E7D32;
+  --color-mtu-green-light: #4CAF50;
+  --color-mtu-green-dark: #1B5E20;
+  --color-mtu-green-50: #E8F5E9;
+  --color-mtu-green-100: #C8E6C9;
+  --color-mtu-green-200: #A5D6A7;
+
+  --color-mtu-purple: #7C6FBA;
+  --color-mtu-purple-light: #9B8FD4;
+  --color-mtu-purple-dark: #5E52A3;
+  --color-mtu-purple-50: #EDE9F8;
+  --color-mtu-purple-100: #D1C4E9;
+
+  --color-mtu-gold: #C9A227;
+  --color-mtu-gold-light: #E6C860;
+  --color-mtu-gold-dark: #A08015;
+
+  /* Semantic mappings */
+  --color-primary: var(--color-mtu-green);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--color-mtu-purple);
+  --color-secondary-foreground: #ffffff;
+  --color-accent: var(--color-mtu-gold);
+  --color-accent-foreground: #1a1a1a;
+
+  /* Status colors */
+  --color-success: #16a34a;
+  --color-warning: #ca8a04;
+  --color-error: #dc2626;
+  --color-info: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-mtu-green-light);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mtu-green);
+}
