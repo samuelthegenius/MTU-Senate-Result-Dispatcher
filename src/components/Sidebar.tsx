@@ -40,6 +40,7 @@ export function Sidebar() {
   console.log('[Sidebar] User:', user?.id)
   console.log('[Sidebar] User metadata:', user?.user_metadata)
   console.log('[Sidebar] Role:', user?.user_metadata?.role)
+  console.log('[Sidebar] Full name:', user?.user_metadata?.full_name)
 
   const isAdmin = user?.user_metadata?.role === 'admin'
   console.log('[Sidebar] isAdmin:', isAdmin)
@@ -93,7 +94,10 @@ export function Sidebar() {
         <div className="mb-4 px-4 py-3 bg-mtu-purple-50 rounded-lg">
           <p className="text-xs text-mtu-purple font-medium uppercase tracking-wider">Signed in as</p>
           <p className="text-sm text-slate-700 font-medium truncate mt-1">
-            {user?.email}
+            {user?.user_metadata?.full_name || user?.email}
+          </p>
+          <p className="text-xs text-slate-500 truncate">
+            {user?.user_metadata?.full_name ? user?.email : ''}
           </p>
           <span className={`inline-flex items-center gap-1 mt-2 px-2 py-0.5 text-xs rounded-full ${
             isAdmin
