@@ -54,8 +54,7 @@ interface ParentContact {
 // Set up bot menu commands
 async function setupBotCommands(botToken: string): Promise<void> {
   const commands = [
-    { command: "start", description: "Start the bot and verify your account" },
-    { command: "relink", description: "Link a new Telegram account (if you changed phones)" },
+    { command: "start", description: "Start the bot and verify/link your account" },
     { command: "status", description: "Check your account status" },
     { command: "help", description: "Get help and information" },
   ]
@@ -119,6 +118,36 @@ serve(async (req) => {
     if (text.startsWith("/start")) {
       const parts = text.split(" ")
       const token = parts.length > 1 ? parts[1] : null
+
+      // Check if this Telegram account is already linked (unless using deep link)
+      if (!token) {
+        const { data: existingContact } = await supabase
+          .from("parent_contacts")
+          .select(`
+            id,
+            telegram_chat_id,
+            student:student_id (full_name, matric_no)
+          `)
+          .eq("telegram_chat_id", chatId.toString())
+          .single()
+
+        if (existingContact) {
+          const studentName = (existingContact.student as any)?.full_name || "your child"
+          await sendTelegramMessage(
+            telegramBotToken,
+            chatId,
+            `✅ Your account is already linked!
+
+You are set up to receive results for <b>${studentName}</b>.
+
+<b>/status</b> - Check your account details
+<b>/help</b> - Get help and information`
+          )
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          })
+        }
+      }
 
       if (token) {
         // Deep link flow: /start [token]
@@ -223,73 +252,21 @@ serve(async (req) => {
       })
     }
 
-    // Handle /relink command - for parents who changed their Telegram account
-    if (text === "/relink") {
-      // Check if this chat is already linked
-      const { data: existingContact } = await supabase
-        .from("parent_contacts")
-        .select("id, telegram_chat_id")
-        .eq("telegram_chat_id", chatId.toString())
-        .single()
-
-      if (existingContact) {
-        await sendTelegramMessage(
-          telegramBotToken,
-          chatId,
-          "✅ This Telegram account is already linked. No need to relink."
-        )
-        return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        })
-      }
-
-      // Prompt for phone verification to relink
-      const keyboard = {
-        keyboard: [
-          [
-            {
-              text: "Verify My Phone Number",
-              request_contact: true,
-            }
-          ],
-          [
-            {
-              text: "Exit",
-            }
-          ]
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      }
-
-      await sendTelegramMessageWithKeyboard(
-        telegramBotToken,
-        chatId,
-        "You want to link a new Telegram account. Please verify your phone number below. This will replace your old Telegram link.",
-        keyboard
-      )
-
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      })
-    }
-
     // Handle /help command
     if (text === "/help") {
       await sendTelegramMessage(
         telegramBotToken,
         chatId,
         "<b>MTU Result Service - Help</b>\n\n" +
-        "<b>/start</b> - Begin verification and link your account\n" +
-        "<b>/relink</b> - Link a new Telegram account (if you changed phones/numbers)\n" +
+        "<b>/start</b> - Link or update your account\n" +
         "<b>/status</b> - Check if your account is linked\n" +
         "<b>/help</b> - Show this help message\n\n" +
-        "To receive results, you need to:\n" +
-        "1. Click /start or send it to the bot\n" +
-        "2. Verify your phone number using the button provided\n" +
-        "3. Or use a deep link provided by the school\n\n" +
-        "<b>Changed your phone or Telegram account?</b>\n" +
-        "Use /relink to connect your new account."
+        "To receive results:\n" +
+        "1. Send /start to the bot\n" +
+        "2. Verify your phone number\n" +
+        "3. Or use a deep link from the school\n\n" +
+        "<b>Changed your Telegram account?</b>\n" +
+        "Just send /start again and verify your phone number."
       )
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

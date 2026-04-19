@@ -30,6 +30,8 @@
 - `BREVO_API_KEY` - for email via Brevo (300 emails/day free, forever)
 - `BREVO_FROM_EMAIL` - sender email address to display
 - `TELEGRAM_BOT_TOKEN` - for Telegram bot (completely free)
+- `GREENAPI_INSTANCE_ID` - Green API instance ID for WhatsApp
+- `GREENAPI_API_TOKEN` - Green API token for WhatsApp
 
 ## Brevo Setup
 
@@ -83,8 +85,20 @@
    - `telegram_chat_id` is automatically populated
 
 7. **Changed Telegram Account?**
-   - **Option A:** Parent sends `/relink` to the bot from their new account → verifies phone number
-   - **Option B:** Staff can send the same deep link again, parent opens it on new account
-   - New `telegram_chat_id` replaces the old one
+   - Parent sends `/start` to the bot from their new account
+   - Verifies phone number via contact sharing
+   - New `telegram_chat_id` replaces the old one automatically
    - Old account stops receiving notifications
-   - Parent receives confirmation of the account change
+   - Or: Staff can re-send the same deep link, parent opens it on new account
+
+## WhatsApp Setup (Green API)
+
+1. Sign up at [green-api.com](https://green-api.com) (free tier available)
+2. Create an instance and get your `Instance ID` and `ApiToken`
+3. Link your WhatsApp by scanning the QR code in your Green API dashboard
+4. Add to your Supabase Edge Function secrets:
+   ```bash
+   supabase secrets set GREENAPI_INSTANCE_ID=your_instance_id
+   supabase secrets set GREENAPI_API_TOKEN=your_api_token
+   ```
+5. Parent's WhatsApp number should be stored in `parent_contacts.whatsapp_no` field
