@@ -64,8 +64,6 @@ serve(async (req: Request) => {
       throw new Error("Missing resultId")
     }
 
-    console.log("[process-dispatch] Looking up result:", resultId)
-    
     // Get result with student info
     const { data: result, error: resultError } = await supabase
       .from("results")
@@ -78,8 +76,6 @@ serve(async (req: Request) => {
       `)
       .eq("id", resultId)
       .single()
-
-    console.log("[process-dispatch] Query result:", { result, error: resultError })
 
     if (resultError || !result) {
       throw new Error(`Result not found: ${resultError?.message || 'No data returned'}`)
@@ -95,8 +91,6 @@ serve(async (req: Request) => {
       .from("parent_contacts")
       .select("student_id, parent_type, email, telegram_chat_id, whatsapp_no")
       .eq("student_id", result.student_id)
-
-    console.log("[process-dispatch] Parent contacts:", { parentContacts, error: parentError })
 
     if (parentError) {
       throw new Error(`Failed to fetch parent contacts: ${parentError.message}`)
@@ -136,12 +130,6 @@ serve(async (req: Request) => {
       try {
         const brevoApiKey = Deno.env.get("BREVO_API_KEY")
         const brevoFromEmail = Deno.env.get("BREVO_FROM_EMAIL") || "noreply@mtu.edu.ng"
-
-        console.log("[process-dispatch] Brevo config:", {
-          hasApiKey: !!brevoApiKey,
-          fromEmail: brevoFromEmail,
-          toEmail: parentContact.email,
-        })
 
         if (brevoApiKey) {
           // Download PDF content for attachment
@@ -248,13 +236,6 @@ serve(async (req: Request) => {
 
           const telegramData = await telegramResponse.json()
 
-          console.log("[process-dispatch] Telegram response:", {
-            status: telegramResponse.status,
-            ok: telegramResponse.ok,
-            data: telegramData,
-            chatId: telegramChatId,
-          })
-
           parentStatus.telegram = {
             success: telegramResponse.ok && telegramData.ok,
             message: telegramData.ok ? "Telegram sent" : `Telegram failed: ${telegramData.description || 'Unknown error'}`,
@@ -282,12 +263,6 @@ serve(async (req: Request) => {
       try {
         const greenApiInstance = Deno.env.get("GREENAPI_INSTANCE_ID")
         const greenApiToken = Deno.env.get("GREENAPI_API_TOKEN")
-
-        console.log("[process-dispatch] Green API config:", {
-          hasInstance: !!greenApiInstance,
-          hasToken: !!greenApiToken,
-          whatsappNo,
-        })
 
         if (greenApiInstance && greenApiToken) {
           // Format phone number (remove + and any non-digits)
@@ -321,12 +296,6 @@ serve(async (req: Request) => {
           })
 
           const greenApiData = await greenApiResponse.json()
-
-          console.log("[process-dispatch] Green API file upload response:", {
-            status: greenApiResponse.status,
-            ok: greenApiResponse.ok,
-            data: greenApiData,
-          })
 
           parentStatus.whatsapp = {
             success: greenApiResponse.ok && greenApiData.idMessage,

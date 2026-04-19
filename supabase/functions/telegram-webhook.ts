@@ -74,8 +74,6 @@ async function setupBotCommands(botToken: string): Promise<void> {
   if (!response.ok) {
     const errorData = await response.json()
     console.error("Failed to set bot commands:", errorData)
-  } else {
-    console.log("Bot commands set successfully")
   }
 }
 

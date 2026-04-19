@@ -67,6 +67,11 @@ export default function StudentsPage() {
 
       if (error) {
         console.error('Error fetching students:', error)
+        toast({
+          title: 'Error loading students',
+          description: error.message || 'Failed to fetch students. Please try again.',
+          variant: 'destructive',
+        })
         return
       }
 

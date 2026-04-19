@@ -166,6 +166,11 @@ export default function DashboardPage() {
 
     if (error) {
       console.error('Error fetching results:', error)
+      toast({
+        title: 'Error loading results',
+        description: error.message || 'Failed to fetch results. Please try again.',
+        variant: 'destructive',
+      })
       return
     }
 

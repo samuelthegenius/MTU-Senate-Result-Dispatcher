@@ -50,8 +50,13 @@ export default function AdminPage() {
 
       if (error) throw error
       setStaff(data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching staff:', error)
+      toast({
+        title: 'Error loading staff',
+        description: error?.message || 'Failed to fetch staff data. Please try again.',
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
     }
@@ -66,8 +71,13 @@ export default function AdminPage() {
 
       if (error) throw error
       setInvites(data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching invites:', error)
+      toast({
+        title: 'Error loading invites',
+        description: error?.message || 'Failed to fetch invitations. Please try again.',
+        variant: 'destructive',
+      })
     }
   }, [])
 

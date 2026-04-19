@@ -21,7 +21,6 @@ export default function LoginPage() {
   // Auto-redirect to dashboard if already logged in
   useEffect(() => {
     if (user) {
-      console.log('[Login] User detected, redirecting to dashboard')
       navigate('/')
     }
   }, [user, navigate])
@@ -29,10 +28,8 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    console.log('[Login] Attempting sign in...')
 
     const { error } = await signIn(email, password)
-    console.log('[Login] Sign in result:', { error: error?.message || null })
 
     if (error) {
       console.error('[Login] Sign in error:', error)
@@ -43,7 +40,11 @@ export default function LoginPage() {
       })
       setLoading(false)
     } else {
-      console.log('[Login] Sign in successful, navigating to /')
+      toast({
+        title: 'Welcome back!',
+        description: 'You have successfully signed in.',
+        variant: 'success',
+      })
       navigate('/')
       // Don't set loading false here - let the auth state change handle it
     }

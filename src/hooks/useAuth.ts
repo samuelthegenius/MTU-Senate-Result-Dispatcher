@@ -27,11 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchStaffData = async (userId: string, retryCount = 0): Promise<{ role: string, is_active: boolean, full_name: string | null } | null> => {
     // Return existing pending request if one exists for this user
     if (pendingRoleFetch.current && retryCount === 0) {
-      console.log('[Auth] Reusing pending staff data fetch')
       return pendingRoleFetch.current
     }
-
-    console.log('[Auth] fetchStaffData called for userId:', userId, 'retry:', retryCount)
 
     const doFetch = async (): Promise<{ role: string, is_active: boolean, full_name: string | null } | null> => {
       try {
@@ -46,12 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('user_id', userId)
           .maybeSingle()
 
-        console.log('[Auth] staff query result:', { staffData, error: error?.code || error?.message || null })
-
         if (error) {
           // Retry on 500 errors up to 2 times
           if ((error.code === '500' || error.message?.includes('500')) && retryCount < 2) {
-            console.log('[Auth] Retrying staff query after 500 error...')
             await new Promise(resolve => setTimeout(resolve, 500))
             return fetchStaffData(userId, retryCount + 1)
           }
@@ -60,19 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (staffData) {
-          console.log('[Auth] Found staff record:', staffData)
           return { role: staffData.role, is_active: staffData.is_active, full_name: staffData.full_name }
         }
       } catch (error: any) {
         console.error('[Auth] Error fetching staff role:', error)
         // Retry on network errors up to 2 times
         if (retryCount < 2) {
-          console.log('[Auth] Retrying after error...')
           await new Promise(resolve => setTimeout(resolve, 500))
           return fetchStaffData(userId, retryCount + 1)
         }
       }
-      console.log('[Auth] No staff record found for userId:', userId)
       return null
     }
 
@@ -90,22 +81,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Prevent double initialization in React StrictMode
     if (hasInitialized.current) {
-      console.log('[Auth] Already initialized, skipping')
       return
     }
 
     const initAuth = async () => {
-      console.log('[Auth] useEffect started, hasSupabase:', hasSupabase())
       hasInitialized.current = true
       
       // Safety timeout - force loading to false after 10 seconds max (must exceed getSession timeout)
       const safetyTimeout = setTimeout(() => {
-        console.log('[Auth] Safety timeout triggered')
         setLoading(false)
       }, 10000)
 
       if (!hasSupabase()) {
-        console.log('[Auth] No Supabase config, setting loading false')
         clearTimeout(safetyTimeout)
         setLoading(false)
         return
@@ -126,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch (err: any) {
             // Retry once on lock contention errors
             if (attempt === 1 && err?.message?.includes('timeout')) {
-              console.log('[Auth] getSession timed out, retrying once after lock contention...')
               await new Promise(r => setTimeout(r, 1000))
               return getSessionWithTimeout(attempt + 1)
             }
@@ -137,7 +123,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionResult = await getSessionWithTimeout()
         
         const { data: { session }, error } = sessionResult
-        console.log('[Auth] getSession result:', { session: !!session, error })
         if (!mounted) return
         
         if (error) {
@@ -149,9 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // If we have a user and haven't fetched their data yet
         if (sessionUser && lastFetchedUserId.current !== sessionUser.id) {
-          console.log('[Auth] Fetching staff data for user:', sessionUser.id)
           const staffData = await fetchStaffData(sessionUser.id)
-          console.log('[Auth] Staff data:', staffData)
           if (staffData) {
             lastFetchedUserId.current = sessionUser.id
             setUser({
@@ -172,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         clearTimeout(safetyTimeout)
         setLoading(false)
-        console.log('[Auth] Initial load complete, loading set to false')
       } catch (err) {
         console.error('[Auth] getSession error:', err)
         clearTimeout(safetyTimeout)
@@ -185,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Listen for auth state changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        console.log('[Auth] Auth state changed:', _event, !!session)
         if (!mounted) return
         
         setSession(session)
@@ -216,7 +197,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       return () => {
-        console.log('[Auth] Cleanup')
         mounted = false
         clearTimeout(safetyTimeout)
         subscription.unsubscribe()
@@ -228,7 +208,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    console.log('[Auth] signIn called')
     if (!hasSupabase()) {
       console.error('[Auth] Supabase not configured')
       return { error: new Error('Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.') }
@@ -243,13 +222,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: new Error('Only @mtu.edu.ng emails are allowed to sign in.') }
     }
 
-    console.log('[Auth] Calling supabase.auth.signInWithPassword...')
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
       password: trimmedPassword
     })
-    console.log('[Auth] signInWithPassword result:', { hasData: !!data, hasUser: !!data?.user, error: error?.message || null })
     
     if (error) {
       console.error('[Auth] Sign in error:', error.message)
@@ -267,7 +243,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: new Error('Login failed. User account not found.') }
     }
     
-    console.log('[Auth] Sign in successful, user:', data.user.id)
     return { error: null }
   }
 

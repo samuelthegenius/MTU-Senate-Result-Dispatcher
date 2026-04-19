@@ -36,14 +36,7 @@ export function Sidebar() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Debug logging
-  console.log('[Sidebar] User:', user?.id)
-  console.log('[Sidebar] User metadata:', user?.user_metadata)
-  console.log('[Sidebar] Role:', user?.user_metadata?.role)
-  console.log('[Sidebar] Full name:', user?.user_metadata?.full_name)
-
   const isAdmin = user?.user_metadata?.role === 'admin'
-  console.log('[Sidebar] isAdmin:', isAdmin)
 
   const filteredNavItems = navItems.filter(
     item => !item.adminOnly || isAdmin
