@@ -9,11 +9,13 @@ export interface ParentContact {
   student_id: string
   email: string
   telegram_chat_id: string | null
+  whatsapp_no: string | null
 }
 
 export interface DispatchStatus {
   email?: { success: boolean; message?: string; timestamp?: string }
   telegram?: { success: boolean; message?: string; timestamp?: string }
+  whatsapp?: { success: boolean; message?: string; timestamp?: string }
 }
 
 export interface Result {

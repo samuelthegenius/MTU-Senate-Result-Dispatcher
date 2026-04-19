@@ -93,7 +93,7 @@ serve(async (req: Request) => {
     // Get parent contact separately
     const { data: parentContact, error: parentError } = await supabase
       .from("parent_contacts")
-      .select("student_id, email, telegram_chat_id")
+      .select("student_id, email, telegram_chat_id, whatsapp_no")
       .eq("student_id", result.student_id)
       .maybeSingle()
 
@@ -265,6 +265,80 @@ serve(async (req: Request) => {
         }
       } catch (e: any) {
         status.telegram = {
+          success: false,
+          message: e.message,
+          timestamp,
+        }
+      }
+    }
+
+    // 3. Send via Green API WhatsApp (if whatsapp_no available)
+    const whatsappNo = (parentContact as any).whatsapp_no
+    if (whatsappNo) {
+      try {
+        const greenApiInstance = Deno.env.get("GREENAPI_INSTANCE_ID")
+        const greenApiToken = Deno.env.get("GREENAPI_API_TOKEN")
+
+        console.log("[process-dispatch] Green API config:", {
+          hasInstance: !!greenApiInstance,
+          hasToken: !!greenApiToken,
+          whatsappNo,
+        })
+
+        if (greenApiInstance && greenApiToken) {
+          // Format phone number (remove + and any non-digits)
+          const formattedPhone = whatsappNo.replace(/\D/g, '')
+          const chatId = `${formattedPhone}@c.us`
+
+          // Download PDF content for upload
+          const pdfResponse = await fetch(signedUrl)
+          if (!pdfResponse.ok) {
+            throw new Error("Failed to download PDF for WhatsApp upload")
+          }
+          const pdfBuffer = await pdfResponse.arrayBuffer()
+          const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
+
+          // Upload PDF to Green API first, then send
+          const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}\n\nThis link also works for 7 days: ${signedUrl}`
+
+          // Green API file upload endpoint
+          const uploadUrl = `https://api.green-api.com/waInstance${greenApiInstance}/sendFileByUpload/${greenApiToken}`
+
+          // Create form data for file upload
+          const formData = new FormData()
+          formData.append("chatId", chatId)
+          formData.append("caption", caption)
+          formData.append("fileName", fileName)
+          formData.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), fileName)
+
+          const greenApiResponse = await fetch(uploadUrl, {
+            method: "POST",
+            body: formData,
+          })
+
+          const greenApiData = await greenApiResponse.json()
+
+          console.log("[process-dispatch] Green API file upload response:", {
+            status: greenApiResponse.status,
+            ok: greenApiResponse.ok,
+            data: greenApiData,
+          })
+
+          status.whatsapp = {
+            success: greenApiResponse.ok && greenApiData.idMessage,
+            message: greenApiData.error || (greenApiData.idMessage ? "PDF sent via WhatsApp" : "WhatsApp upload failed"),
+            timestamp,
+          }
+        } else {
+          status.whatsapp = {
+            success: false,
+            message: "Green API not configured",
+            timestamp,
+          }
+        }
+      } catch (e: any) {
+        console.error("[process-dispatch] Green API error:", e)
+        status.whatsapp = {
           success: false,
           message: e.message,
           timestamp,

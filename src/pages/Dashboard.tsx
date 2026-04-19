@@ -403,6 +403,8 @@ export default function DashboardPage() {
           dispatchErrorMsg = data.status.email.message || 'Email failed'
         } else if (data?.status?.telegram?.success === false) {
           dispatchErrorMsg = data.status.telegram.message || 'Telegram failed'
+        } else if (data?.status?.whatsapp?.success === false) {
+          dispatchErrorMsg = data.status.whatsapp.message || 'WhatsApp failed'
         } else {
           dispatched++
         }
@@ -617,6 +619,7 @@ export default function DashboardPage() {
                     <TableHead className="font-semibold text-slate-700">Senate</TableHead>
                     <TableHead className="font-semibold text-slate-700 text-center">Email</TableHead>
                     <TableHead className="font-semibold text-slate-700 text-center">Telegram</TableHead>
+                    <TableHead className="font-semibold text-slate-700 text-center">WhatsApp</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -652,11 +655,14 @@ export default function DashboardPage() {
                       <TableCell className="text-center">
                         <StatusIcon status={getChannelStatus(result.dispatch_status, 'telegram')} />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <StatusIcon status={getChannelStatus(result.dispatch_status, 'whatsapp')} />
+                      </TableCell>
                     </TableRow>
                   ))}
                   {results.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />
