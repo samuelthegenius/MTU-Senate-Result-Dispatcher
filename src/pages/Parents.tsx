@@ -642,39 +642,42 @@ export default function ParentsPage() {
                         {getChannelIcon(contact.whatsapp_no, 'whatsapp')}
                       </TableCell>
                       <TableCell>
-                        {contact.telegram_chat_id ? (
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            <span className="text-sm text-green-600">Connected</span>
-                          </div>
-                        ) : contact.verification_token ? (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCopyLink(contact)}
-                              className="text-mtu-purple hover:text-mtu-purple-dark h-8 px-2"
-                            >
-                              {copiedId === contact.id ? (
-                                <Check className="h-4 w-4 mr-1" />
-                              ) : (
-                                <Copy className="h-4 w-4 mr-1" />
-                              )}
-                              <span className="text-xs">{copiedId === contact.id ? 'Copied!' : 'Copy Link'}</span>
-                            </Button>
-                            <a
-                              href={generateDeepLink(contact.verification_token) || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-500 hover:text-blue-600"
-                              title="Open in Telegram"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-slate-400">No token</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {contact.telegram_chat_id ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-600">Connected</span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-slate-400">Not connected</span>
+                          )}
+                          {contact.verification_token && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCopyLink(contact)}
+                                className="text-mtu-purple hover:text-mtu-purple-dark h-8 px-2"
+                              >
+                                {copiedId === contact.id ? (
+                                  <Check className="h-4 w-4 mr-1" />
+                                ) : (
+                                  <Copy className="h-4 w-4 mr-1" />
+                                )}
+                                <span className="text-xs">{copiedId === contact.id ? 'Copied!' : 'Copy Link'}</span>
+                              </Button>
+                              <a
+                                href={generateDeepLink(contact.verification_token) || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-600"
+                                title="Open in Telegram"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

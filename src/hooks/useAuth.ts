@@ -21,19 +21,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const lastFetchedUserId = React.useRef<string | null>(null)
   const hasInitialized = React.useRef(false)
-  const pendingRoleFetch = React.useRef<Promise<{ role: string, is_active: boolean } | null> | null>(null)
+  const pendingRoleFetch = React.useRef<Promise<{ role: string, is_active: boolean, full_name: string | null } | null> | null>(null)
 
-  // Helper to fetch staff role with retry logic and deduplication
-  const fetchStaffRole = async (userId: string, retryCount = 0): Promise<{ role: string, is_active: boolean } | null> => {
+  // Helper to fetch staff data with retry logic and deduplication
+  const fetchStaffData = async (userId: string, retryCount = 0): Promise<{ role: string, is_active: boolean, full_name: string | null } | null> => {
     // Return existing pending request if one exists for this user
     if (pendingRoleFetch.current && retryCount === 0) {
-      console.log('[Auth] Reusing pending role fetch')
+      console.log('[Auth] Reusing pending staff data fetch')
       return pendingRoleFetch.current
     }
 
-    console.log('[Auth] fetchStaffRole called for userId:', userId, 'retry:', retryCount)
+    console.log('[Auth] fetchStaffData called for userId:', userId, 'retry:', retryCount)
 
-    const doFetch = async (): Promise<{ role: string, is_active: boolean } | null> => {
+    const doFetch = async (): Promise<{ role: string, is_active: boolean, full_name: string | null } | null> => {
       try {
         // Small delay to ensure auth state is synced
         if (retryCount === 0) {
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const { data: staffData, error } = await supabase
           .from('staff')
-          .select('role, is_active')
+          .select('role, is_active, full_name')
           .eq('user_id', userId)
           .maybeSingle()
 
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if ((error.code === '500' || error.message?.includes('500')) && retryCount < 2) {
             console.log('[Auth] Retrying staff query after 500 error...')
             await new Promise(resolve => setTimeout(resolve, 500))
-            return fetchStaffRole(userId, retryCount + 1)
+            return fetchStaffData(userId, retryCount + 1)
           }
           console.error('[Auth] Staff query error:', error)
           return null
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (staffData) {
           console.log('[Auth] Found staff record:', staffData)
-          return { role: staffData.role, is_active: staffData.is_active }
+          return { role: staffData.role, is_active: staffData.is_active, full_name: staffData.full_name }
         }
       } catch (error: any) {
         console.error('[Auth] Error fetching staff role:', error)
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (retryCount < 2) {
           console.log('[Auth] Retrying after error...')
           await new Promise(resolve => setTimeout(resolve, 500))
-          return fetchStaffRole(userId, retryCount + 1)
+          return fetchStaffData(userId, retryCount + 1)
         }
       }
       console.log('[Auth] No staff record found for userId:', userId)
@@ -147,19 +147,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session)
         const sessionUser = session?.user ?? null
 
-        // If we have a user and haven't fetched their role yet
+        // If we have a user and haven't fetched their data yet
         if (sessionUser && lastFetchedUserId.current !== sessionUser.id) {
-          console.log('[Auth] Fetching role for user:', sessionUser.id)
-          const roleData = await fetchStaffRole(sessionUser.id)
-          console.log('[Auth] Role data:', roleData)
-          if (roleData) {
+          console.log('[Auth] Fetching staff data for user:', sessionUser.id)
+          const staffData = await fetchStaffData(sessionUser.id)
+          console.log('[Auth] Staff data:', staffData)
+          if (staffData) {
             lastFetchedUserId.current = sessionUser.id
             setUser({
               ...sessionUser,
               user_metadata: {
                 ...sessionUser.user_metadata,
-                role: roleData.role,
-                is_active: roleData.is_active
+                role: staffData.role,
+                is_active: staffData.is_active,
+                full_name: staffData.full_name
               }
             } as User)
           } else {
@@ -195,16 +196,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           lastFetchedUserId.current = null
           setUser(null)
         } else if (lastFetchedUserId.current !== sessionUser.id) {
-          // New user logged in - fetch their role
-          const roleData = await fetchStaffRole(sessionUser.id)
-          if (roleData) {
+          // New user logged in - fetch their staff data
+          const staffData = await fetchStaffData(sessionUser.id)
+          if (staffData) {
             lastFetchedUserId.current = sessionUser.id
             setUser({
               ...sessionUser,
               user_metadata: {
                 ...sessionUser.user_metadata,
-                role: roleData.role,
-                is_active: roleData.is_active
+                role: staffData.role,
+                is_active: staffData.is_active,
+                full_name: staffData.full_name
               }
             } as User)
           } else {
