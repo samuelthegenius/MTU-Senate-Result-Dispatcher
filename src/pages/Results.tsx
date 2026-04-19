@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/hooks/use-toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Loader2, FileText, Inbox, ExternalLink, Download } from 'lucide-react'
+import { Loader2, FileText, Inbox, ExternalLink, Download, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface StudentResult {
@@ -20,6 +21,7 @@ interface StudentResult {
 export default function ResultsPage() {
   const [results, setResults] = useState<StudentResult[]>([])
   const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
   const fetchResults = useCallback(async () => {
     const { data, error } = await supabase
@@ -56,6 +58,115 @@ export default function ResultsPage() {
   useEffect(() => {
     fetchResults()
   }, [fetchResults])
+
+  const handleView = async (pdfUrl: string | null, matricNo: string) => {
+    if (!pdfUrl) return
+
+    // Extract file path from URL
+    const pathMatch = pdfUrl.match(/\/result_pdfs\/(.+)$/)
+    if (!pathMatch) {
+      toast({
+        title: 'Error',
+        description: 'Invalid PDF URL',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const filePath = pathMatch[1]
+    const { data, error } = await supabase.storage
+      .from('result_pdfs')
+      .createSignedUrl(filePath, 3600) // 1 hour
+
+    if (error || !data?.signedUrl) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate view link: ' + (error?.message || 'Unknown error'),
+        variant: 'destructive',
+      })
+      return
+    }
+
+    window.open(data.signedUrl, '_blank')
+  }
+
+  const handleDownload = async (pdfUrl: string | null, matricNo: string) => {
+    if (!pdfUrl) return
+
+    // Extract file path from URL
+    const pathMatch = pdfUrl.match(/\/result_pdfs\/(.+)$/)
+    if (!pathMatch) {
+      toast({
+        title: 'Error',
+        description: 'Invalid PDF URL',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const filePath = pathMatch[1]
+    const { data, error } = await supabase.storage
+      .from('result_pdfs')
+      .createSignedUrl(filePath, 3600) // 1 hour
+
+    if (error || !data?.signedUrl) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate download link: ' + (error?.message || 'Unknown error'),
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      // Fetch the file as a blob to create a same-origin URL
+      const response = await fetch(data.signedUrl)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = `${matricNo}_result.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to download file: ' + (err instanceof Error ? err.message : 'Unknown error'),
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleDelete = async (resultId: string, matricNo: string) => {
+    if (!window.confirm(`Are you sure you want to delete the result for student ${matricNo}? This will also delete the PDF file from storage.`)) {
+      return
+    }
+
+    const { error } = await supabase
+      .from('results')
+      .delete()
+      .eq('id', resultId)
+
+    if (error) {
+      console.error('Error deleting result:', error)
+      toast({
+        title: 'Delete failed',
+        description: `Failed to delete result: ${error.message || 'Database error occurred'}. Please try again.`,
+        variant: 'destructive',
+      })
+    } else {
+      await fetchResults()
+      toast({
+        title: 'Result deleted',
+        description: 'Result and associated PDF deleted successfully.',
+        variant: 'success',
+      })
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -123,7 +234,7 @@ export default function ResultsPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 text-mtu-green hover:bg-mtu-green-50"
-                              onClick={() => window.open(result.pdf_url!, '_blank')}
+                              onClick={() => handleView(result.pdf_url, result.matric_no)}
                             >
                               <ExternalLink className="h-4 w-4 mr-1" />
                               View
@@ -132,15 +243,18 @@ export default function ResultsPage() {
                               variant="ghost"
                               size="sm"
                               className="h-8 text-mtu-purple hover:bg-mtu-purple-50"
-                              onClick={() => {
-                                const link = document.createElement('a')
-                                link.href = result.pdf_url!
-                                link.download = `${result.matric_no}_result.pdf`
-                                link.click()
-                              }}
+                              onClick={() => handleDownload(result.pdf_url, result.matric_no)}
                             >
                               <Download className="h-4 w-4 mr-1" />
                               Download
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(result.id, result.matric_no)}
+                              className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         ) : (

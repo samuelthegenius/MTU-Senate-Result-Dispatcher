@@ -115,7 +115,7 @@ serve(async (req: Request) => {
 
     const { data: signedUrlData } = await supabase.storage
       .from("result_pdfs")
-      .createSignedUrl(bucketPath, 604800)
+      .createSignedUrl(bucketPath, 604800, { download: `${student.matric_no}_result.pdf` })
 
     const signedUrl = signedUrlData?.signedUrl
 

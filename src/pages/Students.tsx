@@ -228,11 +228,19 @@ export default function StudentsPage() {
       })
       if (cleanupError) {
         console.warn('Failed to cleanup storage files:', cleanupError)
-        // Continue with deletion even if cleanup fails
+        toast({
+          title: 'Storage cleanup warning',
+          description: 'Could not clean up associated PDF files from storage. The student record will still be deleted, but some files may remain in storage.',
+          variant: 'destructive',
+        })
       }
     } catch (e) {
       console.warn('Storage cleanup error:', e)
-      // Continue with deletion even if cleanup fails
+      toast({
+        title: 'Storage service unavailable',
+        description: 'The storage cleanup service is currently unavailable (CORS or network error). The student record will still be deleted.',
+        variant: 'destructive',
+      })
     }
 
     const { error } = await supabase
@@ -243,8 +251,8 @@ export default function StudentsPage() {
     if (error) {
       console.error('Error deleting student:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to delete student. Please try again.',
+        title: 'Delete failed',
+        description: `Failed to delete student: ${error.message || 'Database error occurred'}. Please try again.`,
         variant: 'destructive',
       })
     } else {

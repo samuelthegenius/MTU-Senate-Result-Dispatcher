@@ -300,6 +300,11 @@ export default function DashboardPage() {
       if (!studentData) {
         const errorMsg = `Student not found for matric: ${matricNo}`
         console.warn(errorMsg)
+        toast({
+          title: 'Student not found',
+          description: `No student record found for matric number "${matricNo}". Please add the student in the Students page before uploading their result.`,
+          variant: 'destructive',
+        })
         setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error', progress: 100, message: errorMsg } : p))
         errors.push(errorMsg)
         continue
