@@ -20,13 +20,23 @@
    - Deploy Edge Function `supabase/functions/process-dispatch.ts`
    - Deploy Edge Function `supabase/functions/telegram-webhook.ts`
 
-4. Start development server:
+4. **Troubleshooting (if needed):**
+   - If you get RLS recursion errors on staff table, run `supabase/fix_recursion.sql`
+   - If you get 400 errors on result approval, run `supabase/fix_results_trigger.sql`
+
+5. Start development server:
    ```bash
    npm run dev
    ```
 
 ## Environment Variables Required
 
+### Frontend (`.env`)
+- `VITE_SUPABASE_URL` - your Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` - your Supabase anonymous key
+- `VITE_TELEGRAM_BOT_USERNAME` - your Telegram bot username (without @)
+
+### Backend (Supabase Edge Function Secrets)
 - `BREVO_API_KEY` - for email via Brevo (300 emails/day free, forever)
 - `BREVO_FROM_EMAIL` - sender email address to display
 - `TELEGRAM_BOT_TOKEN` - for Telegram bot (completely free)
