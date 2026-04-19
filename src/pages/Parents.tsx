@@ -12,6 +12,7 @@ import { Loader2, Users, Inbox, Plus, Mail, Send, X, Upload, FileText, CheckCirc
 interface ParentContact {
   id: string
   student_id: string
+  parent_type: 'father' | 'mother'
   matric_no: string
   full_name: string
   email: string | null
@@ -47,6 +48,7 @@ export default function ParentsPage() {
 
   // Form state
   const [selectedStudentId, setSelectedStudentId] = useState('')
+  const [parentType, setParentType] = useState<'father' | 'mother'>('father')
   const [email, setEmail] = useState('')
   const [whatsappNo, setWhatsappNo] = useState('')
 
@@ -57,6 +59,7 @@ export default function ParentsPage() {
         .select(`
           id,
           student_id,
+          parent_type,
           email,
           telegram_chat_id,
           whatsapp_no,
@@ -81,6 +84,7 @@ export default function ParentsPage() {
       const mapped = (contactsRes.data || []).map((c: any) => ({
         id: c.id,
         student_id: c.student_id,
+        parent_type: c.parent_type || 'father',
         email: c.email,
         telegram_chat_id: c.telegram_chat_id,
         whatsapp_no: c.whatsapp_no,
@@ -122,15 +126,30 @@ export default function ParentsPage() {
       .from('parent_contacts')
       .upsert({
         student_id: selectedStudentId,
+        parent_type: parentType,
         email: email || null,
         whatsapp_no: whatsappNo || null,
-      }, { onConflict: 'student_id' })
+      }, { onConflict: 'student_id,parent_type' })
 
     if (error) {
       console.error('Error saving contact:', error)
+
+      // Handle specific error cases
+      let errorMessage = 'Failed to save contact. Please try again.'
+
+      if (error.code === '23503') {
+        // Foreign key violation - student was deleted
+        errorMessage = 'The selected student no longer exists. Please refresh the page and try again.'
+      } else if (error.code === '23505') {
+        // Unique constraint violation
+        errorMessage = `A ${parentType} contact for this student already exists.`
+      } else if (error.message?.includes('student_id')) {
+        errorMessage = 'Invalid student selected. The student may have been deleted.'
+      }
+
       toast({
         title: 'Error',
-        description: 'Failed to save contact. Please try again.',
+        description: errorMessage,
         variant: 'destructive',
       })
     } else {
@@ -148,6 +167,7 @@ export default function ParentsPage() {
 
   const resetForm = () => {
     setSelectedStudentId('')
+    setParentType('father')
     setEmail('')
     setWhatsappNo('')
     setEditingContact(null)
@@ -156,6 +176,7 @@ export default function ParentsPage() {
   const handleEdit = (contact: ParentContact) => {
     setEditingContact(contact)
     setSelectedStudentId(contact.student_id)
+    setParentType(contact.parent_type)
     setEmail(contact.email || '')
     setWhatsappNo(contact.whatsapp_no || '')
     setShowForm(true)
@@ -163,7 +184,8 @@ export default function ParentsPage() {
   }
 
   const handleDelete = async (contact: ParentContact) => {
-    if (!confirm(`Delete contact for ${contact.full_name} (${contact.matric_no})?`)) {
+    const parentTypeLabel = contact.parent_type === 'mother' ? 'Mother' : 'Father'
+    if (!confirm(`Delete ${parentTypeLabel} contact for ${contact.full_name} (${contact.matric_no})?`)) {
       return
     }
 
@@ -206,7 +228,7 @@ export default function ParentsPage() {
 
       // Parse CSV
       const lines = csvText.split('\n').filter(line => line.trim())
-      const newContacts: { matric_no: string; email?: string }[] = []
+      const newContacts: { matric_no: string; email?: string; parent_type: 'father' | 'mother' }[] = []
       const errors: string[] = []
 
       // Skip header if present
@@ -225,12 +247,15 @@ export default function ParentsPage() {
         if (parts.length >= 2) {
           const matric = parts[0].trim()
           const email = parts[1]?.trim() || undefined
+          const parentTypeRaw = parts[2]?.trim().toLowerCase() || 'father'
+          const parent_type: 'father' | 'mother' = parentTypeRaw === 'mother' ? 'mother' : 'father'
           if (matric && /^\d{11}$/.test(matric)) {
             const studentId = studentMap.get(matric)
             if (studentId) {
               newContacts.push({
                 matric_no: matric,
                 email,
+                parent_type,
               })
             } else {
               errors.push(`Line ${i + 1}: Student with matric "${matric}" not found`)
@@ -265,13 +290,21 @@ export default function ParentsPage() {
           .from('parent_contacts')
           .upsert({
             student_id: studentId,
+            parent_type: contact.parent_type,
             email: contact.email || null,
-            telegram_id: contact.telegram_id || null,
-          }, { onConflict: 'student_id' })
+            // Note: telegram_chat_id cannot be set via CSV - parents must use the bot invitation link
+          }, { onConflict: 'student_id,parent_type' })
 
         if (error) {
           failed++
-          errors.push(`${contact.matric_no}: ${error.message}`)
+          // Provide better error messages for common issues
+          let errorMsg = error.message
+          if (error.code === '23503' || error.message?.includes('student_id')) {
+            errorMsg = 'Student no longer exists (may have been deleted)'
+          } else if (error.code === '23505') {
+            errorMsg = 'Contact already exists for this student and parent type'
+          }
+          errors.push(`${contact.matric_no}: ${errorMsg}`)
         } else {
           // Check if it was an insert or update by checking if contact already existed
           const existingContact = contacts.find(c => c.student_id === studentId)
@@ -311,7 +344,7 @@ export default function ParentsPage() {
   }
 
   const downloadTemplate = () => {
-    const csvContent = 'matric_no,email,telegram_id\n19010301081,parent@email.com,@telegramuser'
+    const csvContent = 'matric_no,email,parent_type\n19010301081,father@email.com,father\n19010301082,mother@email.com,mother'
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -435,8 +468,12 @@ export default function ParentsPage() {
                 <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
                   <li>Column 1: Matric number (11 digits) - must exist in students table</li>
                   <li>Column 2: Email address (optional)</li>
+                  <li>Column 3: Parent type - 'father' or 'mother' (defaults to 'father' if empty)</li>
                   <li>Header row is optional</li>
                 </ul>
+                <p className="text-xs text-amber-600 mt-2">
+                  <strong>Note:</strong> Telegram must be linked separately via the bot invitation link after import.
+                </p>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -532,6 +569,21 @@ export default function ParentsPage() {
                 )}
               </div>
               <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Parent Type</label>
+                <select
+                  value={parentType}
+                  onChange={(e) => setParentType(e.target.value as 'father' | 'mother')}
+                  disabled={!!editingContact}
+                  className="w-full h-11 px-3 rounded-md border border-slate-200 focus:border-mtu-green focus:ring-mtu-green/20 bg-white disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="father">Father</option>
+                  <option value="mother">Mother</option>
+                </select>
+                {editingContact && (
+                  <p className="text-xs text-slate-500">Parent type cannot be changed when editing. Delete and recreate to change type.</p>
+                )}
+              </div>
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
                   <Mail className="h-4 w-4 text-mtu-purple" />
                   Email
@@ -543,7 +595,10 @@ export default function ParentsPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
                 />
-                <p className="text-xs text-slate-500">Telegram will be linked via bot invitation link</p>
+                <p className="text-xs text-slate-500">
+                  Telegram will be linked via bot invitation link.
+                  If the student was deleted and re-added, parents must use the new link to reconnect Telegram.
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
@@ -616,6 +671,7 @@ export default function ParentsPage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Parent Type</TableHead>
                     <TableHead className="font-semibold text-slate-700">Email</TableHead>
                     <TableHead className="font-semibold text-slate-700">Telegram</TableHead>
                     <TableHead className="font-semibold text-slate-700">WhatsApp</TableHead>
@@ -631,6 +687,15 @@ export default function ParentsPage() {
                       </TableCell>
                       <TableCell className="font-medium text-slate-900">
                         {contact.full_name}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          contact.parent_type === 'mother'
+                            ? 'bg-pink-100 text-pink-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {contact.parent_type === 'mother' ? 'Mother' : 'Father'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {getChannelIcon(contact.email, 'email')}
@@ -703,7 +768,7 @@ export default function ParentsPage() {
                   ))}
                   {contacts.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12">
+                      <TableCell colSpan={7} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />

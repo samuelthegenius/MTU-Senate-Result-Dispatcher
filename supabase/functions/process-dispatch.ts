@@ -90,21 +90,20 @@ serve(async (req: Request) => {
       throw new Error("Student not found for result")
     }
 
-    // Get parent contact separately
-    const { data: parentContact, error: parentError } = await supabase
+    // Get all parent contacts for this student (father and mother)
+    const { data: parentContacts, error: parentError } = await supabase
       .from("parent_contacts")
-      .select("student_id, email, telegram_chat_id, whatsapp_no")
+      .select("student_id, parent_type, email, telegram_chat_id, whatsapp_no")
       .eq("student_id", result.student_id)
-      .maybeSingle()
 
-    console.log("[process-dispatch] Parent contact:", { parentContact, error: parentError })
+    console.log("[process-dispatch] Parent contacts:", { parentContacts, error: parentError })
 
     if (parentError) {
-      throw new Error(`Failed to fetch parent contact: ${parentError.message}`)
+      throw new Error(`Failed to fetch parent contacts: ${parentError.message}`)
     }
 
-    if (!parentContact) {
-      throw new Error("Parent contact not found for student")
+    if (!parentContacts || parentContacts.length === 0) {
+      throw new Error("No parent contacts found for student")
     }
 
     const pdfUrl = result.pdf_url as string
@@ -124,11 +123,16 @@ serve(async (req: Request) => {
       throw new Error("Failed to generate signed URL")
     }
 
-    const status: DispatchStatus = {}
+    const status: Record<string, DispatchStatus> = {}
     const timestamp = new Date().toISOString()
 
-    // 1. Send via Brevo (if email available)
-    if (parentContact.email) {
+    // Process each parent contact
+    for (const parentContact of parentContacts) {
+      const parentType = parentContact.parent_type || 'parent'
+      const parentStatus: DispatchStatus = {}
+
+      // 1. Send via Brevo (if email available)
+      if (parentContact.email) {
       try {
         const brevoApiKey = Deno.env.get("BREVO_API_KEY")
         const brevoFromEmail = Deno.env.get("BREVO_FROM_EMAIL") || "noreply@mtu.edu.ng"
@@ -188,20 +192,20 @@ serve(async (req: Request) => {
             emailMessage = `Email failed: ${emailResponse.status} - ${errorBody}`
           }
 
-          status.email = {
+          parentStatus.email = {
             success: emailResponse.ok,
             message: emailMessage,
             timestamp,
           }
         } else {
-          status.email = {
+          parentStatus.email = {
             success: false,
             message: "Brevo not configured",
             timestamp,
           }
         }
       } catch (e: any) {
-        status.email = {
+        parentStatus.email = {
           success: false,
           message: e.message,
           timestamp,
@@ -209,9 +213,9 @@ serve(async (req: Request) => {
       }
     }
 
-    // 2. Send via Telegram Bot
-    const telegramChatId = parentContact.telegram_chat_id
-    if (telegramChatId) {
+      // 2. Send via Telegram Bot
+      const telegramChatId = parentContact.telegram_chat_id
+      if (telegramChatId) {
       try {
         const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN")
 
@@ -251,20 +255,20 @@ serve(async (req: Request) => {
             chatId: telegramChatId,
           })
 
-          status.telegram = {
+          parentStatus.telegram = {
             success: telegramResponse.ok && telegramData.ok,
             message: telegramData.ok ? "Telegram sent" : `Telegram failed: ${telegramData.description || 'Unknown error'}`,
             timestamp,
           }
         } else {
-          status.telegram = {
+          parentStatus.telegram = {
             success: false,
             message: "Telegram bot not configured",
             timestamp,
           }
         }
       } catch (e: any) {
-        status.telegram = {
+        parentStatus.telegram = {
           success: false,
           message: e.message,
           timestamp,
@@ -272,9 +276,9 @@ serve(async (req: Request) => {
       }
     }
 
-    // 3. Send via Green API WhatsApp (if whatsapp_no available)
-    const whatsappNo = (parentContact as any).whatsapp_no
-    if (whatsappNo) {
+      // 3. Send via Green API WhatsApp (if whatsapp_no available)
+      const whatsappNo = (parentContact as any).whatsapp_no
+      if (whatsappNo) {
       try {
         const greenApiInstance = Deno.env.get("GREENAPI_INSTANCE_ID")
         const greenApiToken = Deno.env.get("GREENAPI_API_TOKEN")
@@ -324,13 +328,13 @@ serve(async (req: Request) => {
             data: greenApiData,
           })
 
-          status.whatsapp = {
+          parentStatus.whatsapp = {
             success: greenApiResponse.ok && greenApiData.idMessage,
             message: greenApiData.error || (greenApiData.idMessage ? "PDF sent via WhatsApp" : "WhatsApp upload failed"),
             timestamp,
           }
         } else {
-          status.whatsapp = {
+          parentStatus.whatsapp = {
             success: false,
             message: "Green API not configured",
             timestamp,
@@ -338,12 +342,16 @@ serve(async (req: Request) => {
         }
       } catch (e: any) {
         console.error("[process-dispatch] Green API error:", e)
-        status.whatsapp = {
+        parentStatus.whatsapp = {
           success: false,
           message: e.message,
           timestamp,
         }
       }
+    }
+
+      // Store status for this parent
+      status[parentType] = parentStatus
     }
 
     // Update dispatch status

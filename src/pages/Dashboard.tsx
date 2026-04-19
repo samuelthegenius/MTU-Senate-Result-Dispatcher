@@ -189,18 +189,46 @@ export default function DashboardPage() {
     fetchResults()
   }, [fetchResults])
 
-  // Calculate stats
+  // Calculate stats - check all parent types for dispatch status
+  const isDispatched = (status: any) => {
+    if (!status) return false
+    // Check all parent types
+    for (const parentType of ['father', 'mother', 'parent']) {
+      const parentStatus = status[parentType]
+      if (parentStatus && (parentStatus.email?.success || parentStatus.telegram?.success)) {
+        return true
+      }
+    }
+    // Also check legacy format (direct email/telegram keys)
+    return status.email?.success || status.telegram?.success
+  }
+
+  const isFailed = (status: any) => {
+    if (!status) return false
+    let hasAny = false
+    let allFailed = true
+    // Check all parent types
+    for (const parentType of ['father', 'mother', 'parent']) {
+      const parentStatus = status[parentType]
+      if (parentStatus) {
+        hasAny = true
+        const hasSuccess = parentStatus.email?.success || parentStatus.telegram?.success
+        if (hasSuccess) allFailed = false
+      }
+    }
+    // Also check legacy format
+    if (status.email || status.telegram) {
+      hasAny = true
+      if (status.email?.success || status.telegram?.success) allFailed = false
+    }
+    return hasAny && allFailed
+  }
+
   const stats = {
     total: results.length,
-    dispatched: results.filter(r => {
-      const status = r.dispatch_status
-      return status && (status.email?.success || status.telegram?.success)
-    }).length,
+    dispatched: results.filter(r => isDispatched(r.dispatch_status)).length,
     pendingSenate: results.filter(r => !r.is_senate_approved).length,
-    failed: results.filter(r => {
-      const status = r.dispatch_status
-      return status && !status.email?.success && !status.telegram?.success
-    }).length,
+    failed: results.filter(r => isFailed(r.dispatch_status)).length,
   }
 
   const handleDrag = (e: React.DragEvent) => {
@@ -399,14 +427,47 @@ export default function DashboardPage() {
         if (error) {
           console.error(`Dispatch failed for result ${id}:`, error)
           dispatchErrorMsg = error.message || 'Edge Function error'
-        } else if (data?.status?.email?.success === false) {
-          dispatchErrorMsg = data.status.email.message || 'Email failed'
-        } else if (data?.status?.telegram?.success === false) {
-          dispatchErrorMsg = data.status.telegram.message || 'Telegram failed'
-        } else if (data?.status?.whatsapp?.success === false) {
-          dispatchErrorMsg = data.status.whatsapp.message || 'WhatsApp failed'
         } else {
-          dispatched++
+          // Check dispatch status for all parent types
+          const status = data?.status || {}
+          let hasFailure = false
+          let hasSuccess = false
+
+          for (const parentType of ['father', 'mother', 'parent']) {
+            const parentStatus = status[parentType]
+            if (parentStatus) {
+              if (parentStatus.email?.success === false) {
+                hasFailure = true
+                dispatchErrorMsg = parentStatus.email.message || 'Email failed'
+              } else if (parentStatus.telegram?.success === false) {
+                hasFailure = true
+                dispatchErrorMsg = parentStatus.telegram.message || 'Telegram failed'
+              } else if (parentStatus.whatsapp?.success === false) {
+                hasFailure = true
+                dispatchErrorMsg = parentStatus.whatsapp.message || 'WhatsApp failed'
+              } else if (parentStatus.email?.success || parentStatus.telegram?.success || parentStatus.whatsapp?.success) {
+                hasSuccess = true
+              }
+            }
+          }
+
+          // Check legacy format
+          if (status.email?.success === false) {
+            hasFailure = true
+            dispatchErrorMsg = status.email.message || 'Email failed'
+          } else if (status.telegram?.success === false) {
+            hasFailure = true
+            dispatchErrorMsg = status.telegram.message || 'Telegram failed'
+          } else if (status.whatsapp?.success === false) {
+            hasFailure = true
+            dispatchErrorMsg = status.whatsapp.message || 'WhatsApp failed'
+          } else if (status.email?.success || status.telegram?.success || status.whatsapp?.success) {
+            hasSuccess = true
+          }
+
+          if (!hasFailure || hasSuccess) {
+            dispatched++
+          }
         }
       } catch (e: any) {
         console.error(`Dispatch error for result ${id}:`, e)
@@ -436,8 +497,32 @@ export default function DashboardPage() {
   }
 
   const getChannelStatus = (status: any, channel: string) => {
-    if (!status || !status[channel]) return 'pending'
-    return status[channel]?.success ? 'success' : 'failed'
+    if (!status) return 'pending'
+
+    // Check all parent types for any success
+    let hasSuccess = false
+    let hasAttempt = false
+
+    for (const parentType of ['father', 'mother', 'parent']) {
+      const parentStatus = status[parentType]
+      if (parentStatus && parentStatus[channel]) {
+        hasAttempt = true
+        if (parentStatus[channel].success) {
+          hasSuccess = true
+        }
+      }
+    }
+
+    // Also check legacy format
+    if (status[channel]) {
+      hasAttempt = true
+      if (status[channel].success) {
+        hasSuccess = true
+      }
+    }
+
+    if (!hasAttempt) return 'pending'
+    return hasSuccess ? 'success' : 'failed'
   }
 
   const StatusIcon = ({ status }: { status: string }) => {

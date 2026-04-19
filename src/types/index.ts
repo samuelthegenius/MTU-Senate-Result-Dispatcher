@@ -7,6 +7,7 @@ export interface Student {
 export interface ParentContact {
   id: string
   student_id: string
+  parent_type: 'father' | 'mother'
   email: string
   telegram_chat_id: string | null
   whatsapp_no: string | null

@@ -12,12 +12,13 @@ CREATE TABLE IF NOT EXISTS students (
 CREATE TABLE IF NOT EXISTS parent_contacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  parent_type VARCHAR(10) NOT NULL DEFAULT 'father' CHECK (parent_type IN ('father', 'mother')),
   email VARCHAR(255),
   phone VARCHAR(20),
   whatsapp_no VARCHAR(20),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(student_id)
+  UNIQUE(student_id, parent_type)
 );
 
 -- Create results table
@@ -74,6 +75,10 @@ CREATE POLICY "Allow insert for authenticated staff" ON students
 DROP POLICY IF EXISTS "Allow update for authenticated staff" ON students;
 CREATE POLICY "Allow update for authenticated staff" ON students
   FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Allow delete for authenticated staff" ON students;
+CREATE POLICY "Allow delete for authenticated staff" ON students
+  FOR DELETE TO authenticated USING (true);
 
 DROP POLICY IF EXISTS "Allow read for authenticated staff on parent_contacts" ON parent_contacts;
 CREATE POLICY "Allow read for authenticated staff on parent_contacts" ON parent_contacts
@@ -180,17 +185,26 @@ CREATE INDEX IF NOT EXISTS idx_results_approved ON results(is_senate_approved);
 -- Create trigger function to invoke dispatch when senate approval happens
 CREATE OR REPLACE FUNCTION trigger_dispatch_on_approval()
 RETURNS TRIGGER AS $$
+DECLARE
+  net_exists BOOLEAN;
 BEGIN
   IF NEW.is_senate_approved = true AND OLD.is_senate_approved = false THEN
-    PERFORM net.http_request(
-      method := 'POST',
-      url := (SELECT supabase.functions.invoke_url('process-dispatch')),
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-      ),
-      body := jsonb_build_object('resultId', NEW.id)
-    );
+    -- Check if net schema exists (pg_net extension)
+    SELECT EXISTS(
+      SELECT 1 FROM information_schema.schemata WHERE schema_name = 'net'
+    ) INTO net_exists;
+    
+    IF net_exists THEN
+      PERFORM net.http_request(
+        method := 'POST',
+        url := (SELECT supabase.functions.invoke_url('process-dispatch')),
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+        ),
+        body := jsonb_build_object('resultId', NEW.id)
+      );
+    END IF;
   END IF;
   RETURN NEW;
 END;

@@ -39,6 +39,7 @@ interface TelegramUpdate {
 interface ParentContact {
   id: string
   student_id: string
+  parent_type: 'father' | 'mother'
   email: string | null
   phone: string | null
   whatsapp_no: string | null
@@ -156,6 +157,7 @@ You are set up to receive results for <b>${studentName}</b>.
           .select(`
             id,
             student_id,
+            parent_type,
             email,
             phone,
             whatsapp_no,
@@ -326,6 +328,7 @@ You are set up to receive results for <b>${studentName}</b>.
           .select(`
             id,
             student_id,
+            parent_type,
             email,
             phone,
             whatsapp_no,

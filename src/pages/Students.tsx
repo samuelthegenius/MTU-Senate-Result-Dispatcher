@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Search,
   Trash2,
-  Download
+  Download,
+  Pencil
 } from 'lucide-react'
 
 interface Student {
@@ -54,6 +55,7 @@ export default function StudentsPage() {
   // Form state
   const [matricNo, setMatricNo] = useState('')
   const [fullName, setFullName] = useState('')
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
 
   const fetchStudents = useCallback(async () => {
     setLoading(true)
@@ -139,37 +141,76 @@ export default function StudentsPage() {
     }
 
     setSaving(true)
-    const { error } = await supabase
-      .from('students')
-      .insert({
-        matric_no: matricNo.trim(),
-        full_name: fullName.trim(),
-      })
 
-    if (error) {
-      console.error('Error saving student:', error)
-      if (error.code === '23505') {
-        toast({
-          title: 'Duplicate entry',
-          description: 'A student with this matric number already exists.',
-          variant: 'destructive',
+    if (editingStudent) {
+      // Update existing student
+      const { error } = await supabase
+        .from('students')
+        .update({
+          matric_no: matricNo.trim(),
+          full_name: fullName.trim(),
         })
+        .eq('id', editingStudent.id)
+
+      if (error) {
+        console.error('Error updating student:', error)
+        if (error.code === '23505') {
+          toast({
+            title: 'Duplicate entry',
+            description: 'A student with this matric number already exists.',
+            variant: 'destructive',
+          })
+        } else {
+          toast({
+            title: 'Error',
+            description: 'Failed to update student. Please try again.',
+            variant: 'destructive',
+          })
+        }
       } else {
+        setShowForm(false)
+        resetForm()
+        await fetchStudents()
         toast({
-          title: 'Error',
-          description: 'Failed to save student. Please try again.',
-          variant: 'destructive',
+          title: 'Student updated',
+          description: 'Student updated successfully!',
+          variant: 'success',
         })
       }
     } else {
-      setShowForm(false)
-      resetForm()
-      await fetchStudents()
-      toast({
-        title: 'Student added',
-        description: 'Student added successfully!',
-        variant: 'success',
-      })
+      // Insert new student
+      const { error } = await supabase
+        .from('students')
+        .insert({
+          matric_no: matricNo.trim(),
+          full_name: fullName.trim(),
+        })
+
+      if (error) {
+        console.error('Error saving student:', error)
+        if (error.code === '23505') {
+          toast({
+            title: 'Duplicate entry',
+            description: 'A student with this matric number already exists.',
+            variant: 'destructive',
+          })
+        } else {
+          toast({
+            title: 'Error',
+            description: 'Failed to save student. Please try again.',
+            variant: 'destructive',
+          })
+        }
+      } else {
+        setShowForm(false)
+        resetForm()
+        await fetchStudents()
+        toast({
+          title: 'Student added',
+          description: 'Student added successfully!',
+          variant: 'success',
+        })
+      }
     }
     setSaving(false)
   }
@@ -177,6 +218,21 @@ export default function StudentsPage() {
   const handleDelete = async (studentId: string, matricNo: string) => {
     if (!window.confirm(`Are you sure you want to delete student ${matricNo}? This will also delete their results and parent contacts.`)) {
       return
+    }
+
+    // Clean up PDF files from storage before deleting the student
+    // This prevents orphaned files in storage
+    try {
+      const { error: cleanupError } = await supabase.functions.invoke('cleanup-storage', {
+        body: { studentId, mode: 'single' }
+      })
+      if (cleanupError) {
+        console.warn('Failed to cleanup storage files:', cleanupError)
+        // Continue with deletion even if cleanup fails
+      }
+    } catch (e) {
+      console.warn('Storage cleanup error:', e)
+      // Continue with deletion even if cleanup fails
     }
 
     const { error } = await supabase
@@ -204,6 +260,15 @@ export default function StudentsPage() {
   const resetForm = () => {
     setMatricNo('')
     setFullName('')
+    setEditingStudent(null)
+  }
+
+  const handleEdit = (student: Student) => {
+    setEditingStudent(student)
+    setMatricNo(student.matric_no)
+    setFullName(student.full_name)
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,7 +405,12 @@ export default function StudentsPage() {
             {showBulkForm ? 'Cancel' : 'Bulk Import'}
           </Button>
           <Button
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              if (showForm) {
+                resetForm()
+              }
+              setShowForm(!showForm)
+            }}
             className="bg-mtu-green hover:bg-mtu-green-dark text-white"
           >
             {showForm ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
@@ -382,11 +452,17 @@ export default function StudentsPage() {
         <Card className="border-mtu-green-200">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Plus className="h-5 w-5 text-mtu-green" />
-              Add New Student
+              {editingStudent ? (
+                <Pencil className="h-5 w-5 text-mtu-green" />
+              ) : (
+                <Plus className="h-5 w-5 text-mtu-green" />
+              )}
+              {editingStudent ? 'Edit Student' : 'Add New Student'}
             </CardTitle>
             <CardDescription>
-              Enter the student&apos;s matriculation number and full name
+              {editingStudent
+                ? 'Update the student\'s matriculation number and full name'
+                : "Enter the student's matriculation number and full name"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -432,8 +508,10 @@ export default function StudentsPage() {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    {editingStudent ? 'Updating...' : 'Saving...'}
                   </>
+                ) : editingStudent ? (
+                  'Update Student'
                 ) : (
                   'Save Student'
                 )}
@@ -604,14 +682,24 @@ export default function StudentsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(student.id, student.matric_no)}
-                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(student)}
+                            className="text-mtu-purple hover:text-mtu-purple-dark"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(student.id, student.matric_no)}
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
