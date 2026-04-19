@@ -1,9 +1,27 @@
+/// <reference lib="deno.ns" />
+// deno-lint-ignore no-import-prefix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// deno-lint-ignore no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+interface Student {
+  id: string
+  matric_no: string
+  full_name: string
+}
+
+interface ParentContact {
+  student_id: string
+  parent_type: string | null
+  email: string | null
+  telegram_chat_id: string | null
+  whatsapp_no: string | null
+}
 
 interface DispatchStatus {
   email?: { success: boolean; message?: string; timestamp?: string }
   telegram?: { success: boolean; message?: string; timestamp?: string }
+  whatsapp?: { success: boolean; message?: string; timestamp?: string }
 }
 
 const corsHeaders = {
@@ -81,7 +99,9 @@ serve(async (req: Request) => {
       throw new Error(`Result not found: ${resultError?.message || 'No data returned'}`)
     }
 
-    const student = result.student as any
+    // Supabase may return single relationship as object or array
+    const studentData = result.student as unknown as Student | Student[]
+    const student = Array.isArray(studentData) ? studentData[0] : studentData
     if (!student) {
       throw new Error("Student not found for result")
     }
@@ -192,10 +212,11 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e: any) {
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e)
         parentStatus.email = {
           success: false,
-          message: e.message,
+          message: errorMessage,
           timestamp,
         }
       }
@@ -222,7 +243,7 @@ serve(async (req: Request) => {
           // Create multipart form data - standard Telegram sendDocument
           const formData = new FormData()
           formData.append("chat_id", telegramChatId)
-          formData.append("caption", `📄 <b>Result for ${student.full_name}</b>\n🆔 Matric: <code>${student.matric_no}</code>\n\n⬇️ <a href="${signedUrl}">Download PDF</a>`)
+          formData.append("caption", `📄 <b>Result for ${student.full_name}</b>\n🆔 Matric: <code>${student.matric_no}</code>\n\n⬇️ <a href="${signedUrl}">Download PDF</a>\n\n<em>Link expires in 7 days</em>`)
           formData.append("parse_mode", "HTML")
           formData.append("document", pdfFile)
 
@@ -248,17 +269,19 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e: any) {
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e)
         parentStatus.telegram = {
           success: false,
-          message: e.message,
+          message: errorMessage,
           timestamp,
         }
       }
     }
 
       // 3. Send via Green API WhatsApp (if whatsapp_no available)
-      const whatsappNo = (parentContact as any).whatsapp_no
+      const parent = parentContact as ParentContact
+      const whatsappNo = parent.whatsapp_no
       if (whatsappNo) {
       try {
         const greenApiInstance = Deno.env.get("GREENAPI_INSTANCE_ID")
@@ -309,11 +332,12 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e: any) {
+      } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e)
         console.error("[process-dispatch] Green API error:", e)
         parentStatus.whatsapp = {
           success: false,
-          message: e.message,
+          message: errorMessage,
           timestamp,
         }
       }
@@ -336,11 +360,13 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ success: true, status }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
     console.error("[process-dispatch] Error:", error)
     return new Response(JSON.stringify({ 
-      error: error.message,
-      stack: error.stack 
+      error: errorMessage,
+      stack: errorStack 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

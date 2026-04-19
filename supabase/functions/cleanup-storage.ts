@@ -1,4 +1,6 @@
+// deno-lint-ignore no-import-prefix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// deno-lint-ignore no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
@@ -120,10 +122,11 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[cleanup-storage] Error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
