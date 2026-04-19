@@ -161,8 +161,8 @@ serve(async (req: Request) => {
               sender: { email: brevoFromEmail, name: "MTU Senate Results" },
               to: [{ email: parentContact.email }],
               subject: `Result for ${student.full_name} (${student.matric_no})`,
-              textContent: `Dear Parent/Guardian,\n\nPlease find attached the result for ${student.full_name} (Matric No: ${student.matric_no}).\n\nYou can also view it online here: ${signedUrl}\n\nThis link will expire in 7 days.\n\nBest regards,\nMTU Senate`,
-              htmlContent: `<p>Dear Parent/Guardian,</p><p>Please find attached the result for <strong>${student.full_name}</strong> (Matric No: <strong>${student.matric_no}</strong>).</p><p>You can also <a href="${signedUrl}">view it online here</a>.</p><p><em>This link will expire in 7 days.</em></p><p>Best regards,<br>MTU Senate</p>`,
+              textContent: `Dear Parent/Guardian,\n\nPlease find attached the result for ${student.full_name} (Matric No: ${student.matric_no}).\n\nYou can also download the PDF here: ${signedUrl}\n\nThis link will expire in 7 days.\n\nBest regards,\nMTU Senate`,
+              htmlContent: `<p>Dear Parent/Guardian,</p><p>Please find attached the result for <strong>${student.full_name}</strong> (Matric No: <strong>${student.matric_no}</strong>).</p><p>You can also <a href="${signedUrl}">download the PDF here</a>.</p><p><em>This link will expire in 7 days.</em></p><p>Best regards,<br>MTU Senate</p>`,
               attachment: [
                 {
                   content: pdfBase64,
@@ -278,7 +278,7 @@ serve(async (req: Request) => {
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
           // Upload PDF to Green API first, then send
-          const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}\n\nThis link also works for 7 days: ${signedUrl}`
+          const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}\n\nDownload the PDF here (link expires in 7 days): ${signedUrl}`
 
           // Green API file upload endpoint
           const uploadUrl = `https://api.green-api.com/waInstance${greenApiInstance}/sendFileByUpload/${greenApiToken}`
