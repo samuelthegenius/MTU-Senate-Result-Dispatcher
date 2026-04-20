@@ -2,7 +2,7 @@ export interface Student {
   id: string
   matric_no: string
   full_name: string
-  programme?: string // e.g., Computer Science, Electrical Engineering
+  programme?: string // e.g., B.Sc. Computer Science, B.Eng. Electrical Engineering
   level?: number // e.g., 100, 200, 300, 400, 500
 }
 

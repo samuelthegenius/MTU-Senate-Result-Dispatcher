@@ -420,7 +420,7 @@ export default function StudentsPage() {
   }
 
   const downloadTemplate = () => {
-    const csvContent = 'matric_no,full_name,programme,level\n19010301081,John Doe,Computer Science,400\n19010301082,Jane Smith,Electrical Engineering,300'
+    const csvContent = 'matric_no,full_name,programme,level\n19010301081,John Doe,B.Sc. Computer Science,400\n19010301082,Jane Smith,B.Eng. Electrical Engineering,300'
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -545,13 +545,13 @@ export default function StudentsPage() {
                 <label className="text-sm font-medium text-slate-700">Programme (Optional)</label>
                 <Input
                   type="text"
-                  placeholder="Computer Science"
+                  placeholder="B.Sc. Computer Science"
                   value={programme}
                   onChange={(e) => setProgramme(e.target.value)}
                   className="h-11"
                   maxLength={100}
                 />
-                <p className="text-xs text-slate-400">e.g., Computer Science, Electrical Engineering</p>
+                <p className="text-xs text-slate-400">e.g., B.Sc. Computer Science, B.Eng. Electrical Engineering</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Level (Optional)</label>
@@ -609,7 +609,7 @@ export default function StudentsPage() {
               <ul className="list-disc list-inside space-y-1 text-xs text-slate-500">
                 <li>First column: Matric number (11 digits)</li>
                 <li>Second column: Full name</li>
-                <li>Third column (optional): Programme (e.g., Computer Science)</li>
+                <li>Third column (optional): Programme (e.g., B.Sc. Computer Science)</li>
                 <li>Fourth column (optional): Level (e.g., 400)</li>
                 <li>Header row is optional</li>
                 <li>Comma or tab separated values</li>
