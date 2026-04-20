@@ -70,10 +70,10 @@ function buildResultDetails(student: Student, level?: number, semester?: number)
     parts.push(`Programme: ${student.programme}`)
   }
   if (student.level) {
-    parts.push(`${student.level}L Student`)
+    parts.push(`Currently in: ${student.level}L`)
   }
-  if (level && level !== student.level) {
-    parts.push(`Result: ${level} Level`)
+  if (level) {
+    parts.push(`Result for: ${level}L`)
   }
   if (semester) {
     parts.push(`${semester}${getOrdinalSuffix(semester)} Semester`)
@@ -88,10 +88,10 @@ function buildResultDetailsHTML(student: Student, level?: number, semester?: num
     parts.push(`Programme: <strong>${student.programme}</strong>`)
   }
   if (student.level) {
-    parts.push(`<strong>${student.level}L Student</strong>`)
+    parts.push(`Currently in: <strong>${student.level}L</strong>`)
   }
-  if (level && level !== student.level) {
-    parts.push(`Result: <strong>${level} Level</strong>`)
+  if (level) {
+    parts.push(`Result for: <strong>${level}L</strong>`)
   }
   if (semester) {
     parts.push(`<strong>${semester}${getOrdinalSuffix(semester)} Semester</strong>`)
@@ -317,8 +317,8 @@ serve(async (req: Request) => {
           // Build Telegram caption with programme, student level, result level, and semester
           const telegramDetails: string[] = []
           if (student.programme) telegramDetails.push(`📚 Programme: ${student.programme}`)
-          if (student.level) telegramDetails.push(`🎓 Student: ${student.level}L`)
-          if (result.level && result.level !== student.level) telegramDetails.push(`📊 Result: ${result.level}L`)
+          if (student.level) telegramDetails.push(`🎓 Currently in: ${student.level}L`)
+          if (result.level) telegramDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) telegramDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
 
           // Create multipart form data - standard Telegram sendDocument
@@ -384,8 +384,8 @@ serve(async (req: Request) => {
           // Build WhatsApp caption with programme, student level, result level, and semester
           const whatsappDetails: string[] = []
           if (student.programme) whatsappDetails.push(`📚 Programme: ${student.programme}`)
-          if (student.level) whatsappDetails.push(`🎓 Student: ${student.level}L`)
-          if (result.level && result.level !== student.level) whatsappDetails.push(`📊 Result: ${result.level}L`)
+          if (student.level) whatsappDetails.push(`🎓 Currently in: ${student.level}L`)
+          if (result.level) whatsappDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) whatsappDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
 
           // Upload PDF to Green API first, then send

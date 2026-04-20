@@ -30,6 +30,7 @@ interface PortalResult {
   session: string
   cgpa?: number
   portal_result_id: string
+  published_at?: string  // ISO timestamp when result was published on portal
 }
 
 interface SyncStats {
@@ -137,7 +138,8 @@ async function fetchResultsFromPortal(
   token: string,
   level?: number,
   semester?: number,
-  session?: string
+  session?: string,
+  historicalImport?: boolean
 ): Promise<PortalResult[]> {
   // TODO: Customize this based on actual MTU portal API
   const url = new URL(`${config.base_url}${config.api_endpoint}`)
@@ -147,6 +149,15 @@ async function fetchResultsFromPortal(
 
   // Only fetch senate-approved results
   url.searchParams.append("senate_approved", "true")
+
+  // Only fetch results published in the last 7 days to avoid bulk importing old data
+  // This prevents flooding the app with years of historical results on first integration
+  // Skip this filter when doing a historical import
+  if (!historicalImport) {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    url.searchParams.append("published_after", sevenDaysAgo.toISOString())
+  }
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -265,7 +276,7 @@ async function performPortalSync(
   supabase: ReturnType<typeof createClient>,
   config: PortalConfig,
   encryptionKey: string,
-  options: { level?: number; semester?: number; session?: string }
+  options: { level?: number; semester?: number; session?: string; historicalImport?: boolean }
 ): Promise<SyncStats> {
   const stats: SyncStats = {
     studentsFetched: 0,
@@ -313,7 +324,8 @@ async function performPortalSync(
     token,
     options.level,
     options.semester,
-    options.session
+    options.session,
+    options.historicalImport
   )
   stats.resultsFetched = results.length
 
@@ -377,10 +389,15 @@ async function performPortalSync(
 
       stats.newResults++
 
-      // Auto-dispatch if enabled
+      // Auto-dispatch if enabled AND result was recently published (within last 24 hours)
+      // This prevents dispatching old results that just happen to be new to this app
       type ResultRow = { id: string }
       const resultRowId = (newResult as ResultRow | null)?.id
-      if (config.auto_dispatch_enabled && resultRowId) {
+      const isRecentlyPublished = result.published_at
+        ? (new Date().getTime() - new Date(result.published_at).getTime()) < 24 * 60 * 60 * 1000
+        : true // If no published_at, assume recent (backward compatibility)
+
+      if (config.auto_dispatch_enabled && resultRowId && isRecentlyPublished) {
         const dispatched = await triggerDispatch(supabase, resultRowId)
         if (dispatched) {
           stats.dispatched++
@@ -390,6 +407,8 @@ async function performPortalSync(
             .update({ auto_dispatched_at: new Date().toISOString() })
             .eq("id", resultRowId)
         }
+      } else if (config.auto_dispatch_enabled && resultRowId && !isRecentlyPublished) {
+        console.log(`[fetch-portal] Skipping dispatch for ${result.portal_result_id}: published at ${result.published_at} (not recent)`)
       }
     } catch (error) {
       stats.errors.push(`Result ${result.portal_result_id}: ${error instanceof Error ? error.message : String(error)}`)
@@ -440,7 +459,7 @@ serve(async (req: Request) => {
 
     // Parse request body
     const body = await req.json().catch(() => ({}))
-    const { level, semester, session, syncId } = body
+    const { level, semester, session, syncId, historicalImport } = body
 
     // Get portal configuration
     const { data: config, error: configError } = await supabase
@@ -495,6 +514,7 @@ serve(async (req: Request) => {
       level,
       semester,
       session,
+      historicalImport,
     })
 
     // Determine overall status

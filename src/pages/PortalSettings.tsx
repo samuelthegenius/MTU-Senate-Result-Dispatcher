@@ -64,7 +64,7 @@ export default function PortalSettingsPage() {
   const [syncing, setSyncing] = useState(false)
 
   // Form state
-  const [baseUrl, setBaseUrl] = useState('https://student.mtu.edu.ng')
+  const [baseUrl, setBaseUrl] = useState('https://studentportal.mtu.edu.ng')
   const [apiEndpoint, setApiEndpoint] = useState('/api/results')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -212,12 +212,12 @@ export default function PortalSettingsPage() {
     }
   }
 
-  const handleManualSync = async () => {
+  const handleManualSync = async (historicalImport = false) => {
     setSyncing(true)
 
     try {
       const { data, error } = await supabase.functions.invoke('fetch-portal-data', {
-        body: {}
+        body: { historicalImport }
       })
 
       if (error) {
@@ -243,6 +243,12 @@ export default function PortalSettingsPage() {
       })
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleHistoricalImport = () => {
+    if (confirm('Historical import will fetch ALL results from the portal, not just recent ones. This may take a while and will NOT auto-dispatch old results to parents. Continue?')) {
+      handleManualSync(true)
     }
   }
 
@@ -304,7 +310,7 @@ export default function PortalSettingsPage() {
         </div>
         <div className="flex gap-3">
           <Button
-            onClick={handleManualSync}
+            onClick={() => handleManualSync()}
             disabled={syncing || !syncEnabled}
             variant="outline"
             className="border-mtu-green text-mtu-green hover:bg-mtu-green-50"
@@ -315,6 +321,15 @@ export default function PortalSettingsPage() {
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
             {syncing ? 'Syncing...' : 'Sync Now'}
+          </Button>
+          <Button
+            onClick={handleHistoricalImport}
+            disabled={syncing || !syncEnabled}
+            variant="outline"
+            className="border-amber-500 text-amber-600 hover:bg-amber-50"
+          >
+            <History className="h-4 w-4 mr-2" />
+            Historical Import
           </Button>
         </div>
       </div>
@@ -402,7 +417,7 @@ export default function PortalSettingsPage() {
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 disabled={!isAdmin}
-                placeholder="https://student.mtu.edu.ng"
+                placeholder="https://studentportal.mtu.edu.ng"
                 className="h-11"
               />
               <p className="text-xs text-slate-400">The base URL of the MTU student portal</p>
@@ -622,6 +637,7 @@ export default function PortalSettingsPage() {
                 <li>• Only senate-approved results are fetched (they're already approved on the portal)</li>
                 <li>• When auto-dispatch is enabled, results are immediately sent to parents</li>
                 <li>• You can always trigger a manual sync using the &quot;Sync Now&quot; button</li>
+                <li>• Use &quot;Historical Import&quot; to fetch all past results (old results won't be dispatched)</li>
                 <li>• Results are tagged with source=&quot;portal&quot; for tracking</li>
               </ul>
             </div>

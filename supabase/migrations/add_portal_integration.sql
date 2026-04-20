@@ -3,7 +3,7 @@
 -- Portal configuration table (single row, stores encrypted credentials)
 CREATE TABLE IF NOT EXISTS portal_config (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  base_url TEXT NOT NULL DEFAULT 'https://student.mtu.edu.ng',
+  base_url TEXT NOT NULL DEFAULT 'https://studentportal.mtu.edu.ng',
   api_endpoint TEXT NOT NULL DEFAULT '/api/results',
   -- Credentials are encrypted at application level before storage
   encrypted_username TEXT,
@@ -48,6 +48,12 @@ ALTER TABLE results ADD COLUMN IF NOT EXISTS auto_dispatch_status JSONB DEFAULT 
 -- Enable RLS
 ALTER TABLE portal_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE portal_sync_logs ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "Admins can manage portal config" ON portal_config;
+DROP POLICY IF EXISTS "Staff can view portal config" ON portal_config;
+DROP POLICY IF EXISTS "Staff can view sync logs" ON portal_sync_logs;
+DROP POLICY IF EXISTS "Admins can manage sync logs" ON portal_sync_logs;
 
 -- Only admins can manage portal config
 CREATE POLICY "Admins can manage portal config" ON portal_config
