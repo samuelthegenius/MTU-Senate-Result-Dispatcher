@@ -167,7 +167,7 @@ function toast({ ...props }: Toast) {
 
 function useToast() {
   const subscribe = React.useCallback((callback: () => void) => {
-    const listener = (newState: State) => {
+    const listener = (_newState: State) => {
       callback()
     }
     listeners.push(listener)

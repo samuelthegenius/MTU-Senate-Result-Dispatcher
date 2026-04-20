@@ -19,14 +19,13 @@ import {
   Clock,
   Shield,
   History,
-  Play,
   Save,
   Link2
 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 
-interface PortalConfig {
+export interface PortalConfig {
   id: string
   base_url: string
   api_endpoint: string
@@ -349,16 +348,16 @@ export default function PortalSettingsPage() {
             <div className="p-4 bg-slate-50 rounded-lg">
               <p className="text-sm font-medium text-slate-500">Last Sync</p>
               <p className="mt-1 font-medium text-slate-900">
-                {formatDate(config?.last_sync_at)}
+                {formatDate(config?.last_sync_at ?? null)}
               </p>
               {config?.last_sync_at && (
-                <p className="text-xs text-slate-400">{formatRelativeTime(config?.last_sync_at)}</p>
+                <p className="text-xs text-slate-400">{formatRelativeTime(config?.last_sync_at ?? null)}</p>
               )}
             </div>
             <div className="p-4 bg-slate-50 rounded-lg">
               <p className="text-sm font-medium text-slate-500">Result</p>
               <div className="mt-1">
-                {getStatusBadge(config?.last_sync_status)}
+                {getStatusBadge(config?.last_sync_status ?? null)}
               </div>
             </div>
             <div className="p-4 bg-slate-50 rounded-lg">

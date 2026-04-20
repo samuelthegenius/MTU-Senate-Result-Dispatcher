@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { AlertCircle, AlertTriangle, CheckCircle, Loader2, Users, UserPlus, Mail, Shield, Crown } from 'lucide-react'
+import { AlertCircle, CheckCircle, Loader2, Users, UserPlus, Mail, Shield, Crown } from 'lucide-react'
 import type { Staff, Invite } from '@/types'
 
 export default function AdminPage() {
@@ -86,7 +86,7 @@ export default function AdminPage() {
 
     setInviteFormLoading(true)
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('invites')
         .insert({
           email: newStaffEmail.toLowerCase().trim(),
@@ -437,7 +437,7 @@ export default function AdminPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="block text-sm font-medium text-slate-700">
+                <Label htmlFor="role" className="block text-sm font-medium text-slate-700">
                   Role
                 </Label>
                 <div className="grid grid-cols-2 gap-3">

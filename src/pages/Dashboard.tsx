@@ -45,6 +45,13 @@ interface UploadProgress {
   message?: string
 }
 
+interface PortalConfig {
+  sync_enabled: boolean
+  last_sync_at: string | null
+  last_sync_status: string | null
+  auto_dispatch_enabled: boolean
+}
+
 interface UploadResult {
   success: boolean
   matricNo?: string

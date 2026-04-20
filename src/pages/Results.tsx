@@ -87,7 +87,7 @@ export default function ResultsPage() {
     }
   }, [fetchResults])
 
-  const handleView = async (pdfUrl: string | null, matricNo: string) => {
+  const handleView = async (pdfUrl: string | null, _matricNo: string) => {
     if (!pdfUrl) return
 
     // Extract file path from URL
