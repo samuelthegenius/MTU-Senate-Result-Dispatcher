@@ -29,6 +29,8 @@ interface Student {
   id: string
   matric_no: string
   full_name: string
+  programme?: string
+  level?: number
   created_at: string
   has_result?: boolean
   has_parent_contact?: boolean
@@ -55,6 +57,8 @@ export default function StudentsPage() {
   // Form state
   const [matricNo, setMatricNo] = useState('')
   const [fullName, setFullName] = useState('')
+  const [programme, setProgramme] = useState('')
+  const [level, setLevel] = useState('')
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
 
   const fetchStudents = useCallback(async () => {
@@ -62,7 +66,7 @@ export default function StudentsPage() {
     try {
       const { data, error } = await supabase
         .from('students')
-        .select('id, matric_no, full_name, created_at')
+        .select('id, matric_no, full_name, programme, level, created_at')
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -108,6 +112,19 @@ export default function StudentsPage() {
 
   useEffect(() => {
     fetchStudents()
+
+    // Subscribe to students changes for realtime updates
+    const channel = supabase
+      .channel('students_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'students' },
+        () => fetchStudents()
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
   }, [fetchStudents])
 
   useEffect(() => {
@@ -117,7 +134,9 @@ export default function StudentsPage() {
         students.filter(
           s =>
             s.matric_no.toLowerCase().includes(query) ||
-            s.full_name.toLowerCase().includes(query)
+            s.full_name.toLowerCase().includes(query) ||
+            (s.programme && s.programme.toLowerCase().includes(query)) ||
+            (s.level && s.level.toString().includes(query))
         )
       )
     } else {
@@ -154,6 +173,8 @@ export default function StudentsPage() {
         .update({
           matric_no: matricNo.trim(),
           full_name: fullName.trim(),
+          programme: programme.trim() || null,
+          level: level ? parseInt(level, 10) : null,
         })
         .eq('id', editingStudent.id)
 
@@ -189,6 +210,8 @@ export default function StudentsPage() {
         .insert({
           matric_no: matricNo.trim(),
           full_name: fullName.trim(),
+          programme: programme.trim() || null,
+          level: level ? parseInt(level, 10) : null,
         })
 
       if (error) {
@@ -273,6 +296,8 @@ export default function StudentsPage() {
   const resetForm = () => {
     setMatricNo('')
     setFullName('')
+    setProgramme('')
+    setLevel('')
     setEditingStudent(null)
   }
 
@@ -280,6 +305,8 @@ export default function StudentsPage() {
     setEditingStudent(student)
     setMatricNo(student.matric_no)
     setFullName(student.full_name)
+    setProgramme(student.programme || '')
+    setLevel(student.level?.toString() || '')
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -301,7 +328,7 @@ export default function StudentsPage() {
 
       // Parse CSV
       const lines = csvText.split('\n').filter(line => line.trim())
-      const students: { matric_no: string; full_name: string }[] = []
+      const students: { matric_no: string; full_name: string; programme?: string; level?: number }[] = []
       const errors: string[] = []
 
       // Skip header if present
@@ -316,10 +343,22 @@ export default function StudentsPage() {
 
         if (parts.length >= 2) {
           const matric = parts[0].trim()
-          const name = parts.slice(1).join(',').trim()
+          const name = parts[1].trim()
+          const programmeName = parts[2]?.trim() || undefined
+          const levelValue = parts[3]?.trim()
 
           if (matric && name && /^\d{11}$/.test(matric)) {
-            students.push({ matric_no: matric, full_name: name })
+            const studentData: { matric_no: string; full_name: string; programme?: string; level?: number } = {
+              matric_no: matric,
+              full_name: name
+            }
+            if (programmeName) {
+              studentData.programme = programmeName
+            }
+            if (levelValue && /^\d{3,4}$/.test(levelValue)) {
+              studentData.level = parseInt(levelValue, 10)
+            }
+            students.push(studentData)
           } else if (matric) {
             errors.push(`Line ${i + 1}: Invalid matric number "${matric}"`)
           }
@@ -381,7 +420,7 @@ export default function StudentsPage() {
   }
 
   const downloadTemplate = () => {
-    const csvContent = 'matric_no,full_name\n19010301081,John Doe\n19010301082,Jane Smith'
+    const csvContent = 'matric_no,full_name,programme,level\n19010301081,John Doe,Computer Science,400\n19010301082,Jane Smith,Electrical Engineering,300'
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -502,6 +541,32 @@ export default function StudentsPage() {
                   className="h-11"
                 />
               </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Programme (Optional)</label>
+                <Input
+                  type="text"
+                  placeholder="Computer Science"
+                  value={programme}
+                  onChange={(e) => setProgramme(e.target.value)}
+                  className="h-11"
+                  maxLength={100}
+                />
+                <p className="text-xs text-slate-400">e.g., Computer Science, Electrical Engineering</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Level (Optional)</label>
+                <Input
+                  type="number"
+                  placeholder="400"
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value)}
+                  className="h-11"
+                  min={100}
+                  max={900}
+                  step={100}
+                />
+                <p className="text-xs text-slate-400">e.g., 100, 200, 300, 400, 500</p>
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-4">
               <Button
@@ -538,25 +603,18 @@ export default function StudentsPage() {
       {showBulkForm && (
         <Card className="border-mtu-purple-200">
           <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Upload className="h-5 w-5 text-mtu-purple" />
-              Bulk Import Students
-            </CardTitle>
-            <CardDescription>
-              Upload a CSV file with student data (matric_no, full_name)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <p className="text-sm font-medium text-slate-700 mb-2">CSV Format Requirements:</p>
-                <ul className="text-sm text-slate-600 list-disc list-inside space-y-1">
-                  <li>First column: Matric number (11 digits)</li>
-                  <li>Second column: Full name</li>
-                  <li>Header row is optional</li>
-                  <li>Comma or tab separated values</li>
-                </ul>
-                <Button
+            <CardTitle>Bulk Import Students</CardTitle>
+            <div className="text-sm text-slate-600 mt-2">
+              <p className="mb-2">Upload a CSV file with the following format:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs text-slate-500">
+                <li>First column: Matric number (11 digits)</li>
+                <li>Second column: Full name</li>
+                <li>Third column (optional): Programme (e.g., Computer Science)</li>
+                <li>Fourth column (optional): Level (e.g., 400)</li>
+                <li>Header row is optional</li>
+                <li>Comma or tab separated values</li>
+              </ul>
+              <Button
                   variant="ghost"
                   size="sm"
                   onClick={downloadTemplate}
@@ -566,7 +624,9 @@ export default function StudentsPage() {
                   Download Template
                 </Button>
               </div>
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-mtu-purple transition-colors">
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-mtu-purple transition-colors">
                 <input
                   type="file"
                   id="csv-upload"
@@ -580,7 +640,6 @@ export default function StudentsPage() {
                   <p className="text-sm text-slate-400 mt-1">or drag and drop here</p>
                 </label>
               </div>
-            </div>
           </CardContent>
         </Card>
       )}
@@ -654,6 +713,8 @@ export default function StudentsPage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Full Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Programme</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Level</TableHead>
                     <TableHead className="font-semibold text-slate-700">Result</TableHead>
                     <TableHead className="font-semibold text-slate-700">Parent Contact</TableHead>
                     <TableHead className="font-semibold text-slate-700 w-20">Actions</TableHead>
@@ -667,6 +728,12 @@ export default function StudentsPage() {
                       </TableCell>
                       <TableCell className="font-medium text-slate-900">
                         {student.full_name}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {student.programme || '-'}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {student.level ? `${student.level}L` : '-'}
                       </TableCell>
                       <TableCell>
                         {student.has_result ? (
@@ -718,7 +785,7 @@ export default function StudentsPage() {
                   ))}
                   {filteredStudents.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12">
+                      <TableCell colSpan={7} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />

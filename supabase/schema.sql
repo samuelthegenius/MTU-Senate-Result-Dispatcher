@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS students (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   matric_no VARCHAR(20) UNIQUE NOT NULL,
   full_name VARCHAR(255) NOT NULL,
+  programme VARCHAR(100), -- e.g., Computer Science, Electrical Engineering
+  level INTEGER, -- e.g., 100, 200, 300, 400, 500
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -26,6 +28,8 @@ CREATE TABLE IF NOT EXISTS results (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID REFERENCES students(id) ON DELETE CASCADE UNIQUE,
   pdf_url TEXT,
+  level INTEGER, -- e.g., 100, 200, 300, 400, 500
+  semester INTEGER, -- e.g., 1 or 2
   is_senate_approved BOOLEAN DEFAULT FALSE,
   dispatch_status JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -107,6 +111,10 @@ CREATE POLICY "Allow insert for authenticated staff on results" ON results
 DROP POLICY IF EXISTS "Allow update for authenticated staff on results" ON results;
 CREATE POLICY "Allow update for authenticated staff on results" ON results
   FOR UPDATE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Allow delete for authenticated staff on results" ON results;
+CREATE POLICY "Allow delete for authenticated staff on results" ON results
+  FOR DELETE TO authenticated USING (true);
 
 -- Staff policies
 DROP POLICY IF EXISTS "Anyone can read staff" ON staff;

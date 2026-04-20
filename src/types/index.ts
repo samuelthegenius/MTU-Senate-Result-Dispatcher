@@ -2,6 +2,8 @@ export interface Student {
   id: string
   matric_no: string
   full_name: string
+  programme?: string // e.g., Computer Science, Electrical Engineering
+  level?: number // e.g., 100, 200, 300, 400, 500
 }
 
 export interface ParentContact {
@@ -25,6 +27,8 @@ export interface Result {
   student?: Student
   parent_contact?: ParentContact
   pdf_url: string
+  level?: number // e.g., 100, 200, 300, 400, 500
+  semester?: number // e.g., 1 or 2
   is_senate_approved: boolean
   dispatch_status: DispatchStatus | null
   created_at: string

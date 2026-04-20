@@ -53,19 +53,11 @@ export default function ParentsPage() {
   const [whatsappNo, setWhatsappNo] = useState('')
 
   const fetchData = useCallback(async () => {
+    // Fetch contacts and students separately to avoid foreign key join issues
     const [contactsRes, studentsRes] = await Promise.all([
       supabase
         .from('parent_contacts')
-        .select(`
-          id,
-          student_id,
-          parent_type,
-          email,
-          telegram_chat_id,
-          whatsapp_no,
-          verification_token,
-          student:student_id (matric_no, full_name)
-        `)
+        .select('id, student_id, parent_type, email, telegram_chat_id, whatsapp_no, verification_token, created_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('students')
@@ -81,17 +73,23 @@ export default function ParentsPage() {
         variant: 'destructive',
       })
     } else {
-      const mapped = (contactsRes.data || []).map((c: any) => ({
-        id: c.id,
-        student_id: c.student_id,
-        parent_type: c.parent_type || 'father',
-        email: c.email,
-        telegram_chat_id: c.telegram_chat_id,
-        whatsapp_no: c.whatsapp_no,
-        verification_token: c.verification_token,
-        matric_no: c.student?.matric_no,
-        full_name: c.student?.full_name,
-      }))
+      // Create a lookup map for students
+      const studentMap = new Map((studentsRes.data || []).map(s => [s.id, s]))
+
+      const mapped = (contactsRes.data || []).map((c: any) => {
+        const student = studentMap.get(c.student_id)
+        return {
+          id: c.id,
+          student_id: c.student_id,
+          parent_type: c.parent_type || 'father',
+          email: c.email,
+          telegram_chat_id: c.telegram_chat_id,
+          whatsapp_no: c.whatsapp_no,
+          verification_token: c.verification_token,
+          matric_no: student?.matric_no,
+          full_name: student?.full_name,
+        }
+      })
       setContacts(mapped)
     }
 
@@ -106,6 +104,19 @@ export default function ParentsPage() {
 
   useEffect(() => {
     fetchData()
+
+    // Subscribe to parent_contacts changes for realtime updates
+    const channel = supabase
+      .channel('parent_contacts_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'parent_contacts' },
+        () => fetchData()
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
   }, [fetchData])
 
   const handleSave = async () => {

@@ -8,6 +8,18 @@ interface Student {
   id: string
   matric_no: string
   full_name: string
+  programme?: string
+  level?: number
+}
+
+interface Result {
+  id: string
+  student_id: string
+  pdf_url: string
+  level?: number
+  semester?: number
+  is_senate_approved: boolean
+  student: Student
 }
 
 interface ParentContact {
@@ -28,6 +40,63 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+}
+
+// Helper function to get ordinal suffix (st, nd, rd, th)
+function getOrdinalSuffix(n: number): string {
+  const lastDigit = n % 10
+  const lastTwoDigits = n % 100
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+    return "th"
+  }
+
+  switch (lastDigit) {
+    case 1:
+      return "st"
+    case 2:
+      return "nd"
+    case 3:
+      return "rd"
+    default:
+      return "th"
+  }
+}
+
+// Helper function to build result details string
+function buildResultDetails(student: Student, level?: number, semester?: number): string {
+  const parts: string[] = []
+  if (student.programme) {
+    parts.push(`Programme: ${student.programme}`)
+  }
+  if (student.level) {
+    parts.push(`${student.level}L Student`)
+  }
+  if (level && level !== student.level) {
+    parts.push(`Result: ${level} Level`)
+  }
+  if (semester) {
+    parts.push(`${semester}${getOrdinalSuffix(semester)} Semester`)
+  }
+  return parts.length > 0 ? ` (${parts.join(', ')})` : ''
+}
+
+// Helper function to build result details for HTML
+function buildResultDetailsHTML(student: Student, level?: number, semester?: number): string {
+  const parts: string[] = []
+  if (student.programme) {
+    parts.push(`Programme: <strong>${student.programme}</strong>`)
+  }
+  if (student.level) {
+    parts.push(`<strong>${student.level}L Student</strong>`)
+  }
+  if (level && level !== student.level) {
+    parts.push(`Result: <strong>${level} Level</strong>`)
+  }
+  if (semester) {
+    parts.push(`<strong>${semester}${getOrdinalSuffix(semester)} Semester</strong>`)
+  }
+  return parts.length > 0 ? ` (${parts.join(', ')})` : ''
 }
 
 serve(async (req: Request) => {
@@ -89,8 +158,10 @@ serve(async (req: Request) => {
         id,
         student_id,
         pdf_url,
+        level,
+        semester,
         is_senate_approved,
-        student:students (id, matric_no, full_name)
+        student:students (id, matric_no, full_name, programme, level)
       `)
       .eq("id", resultId)
       .single()
@@ -171,6 +242,9 @@ serve(async (req: Request) => {
           
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
+          const resultDetails = buildResultDetails(student, result.level, result.semester)
+          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester)
+
           const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
             headers: {
@@ -180,9 +254,9 @@ serve(async (req: Request) => {
             body: JSON.stringify({
               sender: { email: brevoFromEmail, name: "MTU Senate Results" },
               to: [{ email: parentContact.email }],
-              subject: `Result for ${student.full_name} (${student.matric_no})`,
-              textContent: `Dear Parent/Guardian,\n\nPlease find attached the result for ${student.full_name} (Matric No: ${student.matric_no}).\n\nYou can also download the PDF here: ${signedUrl}\n\nThis link will expire in 7 days.\n\nBest regards,\nMTU Senate`,
-              htmlContent: `<p>Dear Parent/Guardian,</p><p>Please find attached the result for <strong>${student.full_name}</strong> (Matric No: <strong>${student.matric_no}</strong>).</p><p>You can also <a href="${signedUrl}">download the PDF here</a>.</p><p><em>This link will expire in 7 days.</em></p><p>Best regards,<br>MTU Senate</p>`,
+              subject: `Result for ${student.full_name}${resultDetails} (${student.matric_no})`,
+              textContent: `Dear Parent/Guardian,\n\nPlease find attached the result for ${student.full_name}${resultDetails} (Matric No: ${student.matric_no}).\n\nYou can also download the PDF here: ${signedUrl}\n\nThis link will expire in 7 days.\n\nBest regards,\nMTU Senate`,
+              htmlContent: `<p>Dear Parent/Guardian,</p><p>Please find attached the result for <strong>${student.full_name}</strong>${resultDetailsHTML} (Matric No: <strong>${student.matric_no}</strong>).</p><p>You can also <a href="${signedUrl}">download the PDF here</a>.</p><p><em>This link will expire in 7 days.</em></p><p>Best regards,<br>MTU Senate</p>`,
               attachment: [
                 {
                   content: pdfBase64,
@@ -240,10 +314,17 @@ serve(async (req: Request) => {
           // Create File object with explicit PDF MIME type
           const pdfFile = new File([pdfBuffer], fileName, { type: "application/pdf" })
 
+          // Build Telegram caption with programme, student level, result level, and semester
+          const telegramDetails: string[] = []
+          if (student.programme) telegramDetails.push(`📚 Programme: ${student.programme}`)
+          if (student.level) telegramDetails.push(`🎓 Student: ${student.level}L`)
+          if (result.level && result.level !== student.level) telegramDetails.push(`📊 Result: ${result.level}L`)
+          if (result.semester) telegramDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+
           // Create multipart form data - standard Telegram sendDocument
           const formData = new FormData()
           formData.append("chat_id", telegramChatId)
-          formData.append("caption", `📄 <b>Result for ${student.full_name}</b>\n🆔 Matric: <code>${student.matric_no}</code>\n\n⬇️ <a href="${signedUrl}">Download PDF</a>\n\n<em>Link expires in 7 days</em>`)
+          formData.append("caption", `📄 <b>Result for ${student.full_name}</b>\n🆔 Matric: <code>${student.matric_no}</code>${telegramDetails.length > 0 ? '\n' + telegramDetails.join('\n') : ''}\n\n⬇️ <a href="${signedUrl}">Download PDF</a>\n\n<em>Link expires in 7 days</em>`)
           formData.append("parse_mode", "HTML")
           formData.append("document", pdfFile)
 
@@ -300,8 +381,15 @@ serve(async (req: Request) => {
           const pdfBuffer = await pdfResponse.arrayBuffer()
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
+          // Build WhatsApp caption with programme, student level, result level, and semester
+          const whatsappDetails: string[] = []
+          if (student.programme) whatsappDetails.push(`📚 Programme: ${student.programme}`)
+          if (student.level) whatsappDetails.push(`🎓 Student: ${student.level}L`)
+          if (result.level && result.level !== student.level) whatsappDetails.push(`📊 Result: ${result.level}L`)
+          if (result.semester) whatsappDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+
           // Upload PDF to Green API first, then send
-          const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}\n\nDownload the PDF here (link expires in 7 days): ${signedUrl}`
+          const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}${whatsappDetails.length > 0 ? '\n' + whatsappDetails.join('\n') : ''}\n\nDownload the PDF here (link expires in 7 days): ${signedUrl}`
 
           // Green API file upload endpoint
           const uploadUrl = `https://api.green-api.com/waInstance${greenApiInstance}/sendFileByUpload/${greenApiToken}`

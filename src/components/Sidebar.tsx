@@ -12,7 +12,8 @@ import {
   X,
   ChevronRight,
   GraduationCap,
-  User
+  User,
+  Cloud
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { label: 'Results', icon: FileText, href: '/results' },
   { label: 'Students', icon: User, href: '/students' },
   { label: 'Parent Directory', icon: GraduationCap, href: '/parents' },
+  { label: 'Portal Integration', icon: Cloud, href: '/portal', adminOnly: true },
   { label: 'Staff Management', icon: Users, href: '/admin', adminOnly: true },
 ]
 

@@ -24,37 +24,47 @@ export default function ResultsPage() {
   const { toast } = useToast()
 
   const fetchResults = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('results')
-      .select(`
-        id,
-        student_id,
-        pdf_url,
-        is_senate_approved,
-        created_at,
-        student:student_id (matric_no, full_name)
-      `)
-      .order('created_at', { ascending: false })
+    // Fetch results and students separately to avoid foreign key join issues
+    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: studentsError }] = await Promise.all([
+      supabase
+        .from('results')
+        .select('id, student_id, pdf_url, is_senate_approved, created_at')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('students')
+        .select('id, matric_no, full_name')
+    ])
 
-    if (error) {
-      console.error('Error fetching results:', error)
+    if (resultsError) {
+      console.error('Error fetching results:', resultsError)
       toast({
         title: 'Error loading results',
-        description: error.message || 'Failed to fetch results. Please try again.',
+        description: resultsError.message || 'Failed to fetch results. Please try again.',
         variant: 'destructive',
       })
+      setLoading(false)
       return
     }
 
-    const mapped = (data || []).map((r: any) => ({
-      id: r.id,
-      student_id: r.student_id,
-      pdf_url: r.pdf_url,
-      is_senate_approved: r.is_senate_approved,
-      created_at: r.created_at,
-      matric_no: r.student?.matric_no,
-      full_name: r.student?.full_name,
-    }))
+    if (studentsError) {
+      console.error('Error fetching students:', studentsError)
+    }
+
+    // Create a lookup map for students (convert UUIDs to strings for consistent comparison)
+    const studentMap = new Map((studentsData || []).map(s => [String(s.id), s]))
+
+    const mapped = (resultsData || []).map((r: any) => {
+      const student = studentMap.get(String(r.student_id))
+      return {
+        id: r.id,
+        student_id: r.student_id,
+        pdf_url: r.pdf_url,
+        is_senate_approved: r.is_senate_approved,
+        created_at: r.created_at,
+        matric_no: student?.matric_no ?? 'N/A',
+        full_name: student?.full_name ?? 'Unknown Student',
+      }
+    })
 
     setResults(mapped)
     setLoading(false)
@@ -62,6 +72,19 @@ export default function ResultsPage() {
 
   useEffect(() => {
     fetchResults()
+
+    // Subscribe to results changes for realtime updates
+    const channel = supabase
+      .channel('results_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'results' },
+        () => fetchResults()
+      )
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
   }, [fetchResults])
 
   const handleView = async (pdfUrl: string | null, matricNo: string) => {

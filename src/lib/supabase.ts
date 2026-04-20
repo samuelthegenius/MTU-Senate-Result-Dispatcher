@@ -41,4 +41,8 @@ export const supabase = supabaseClient ?? {
   functions: {
     invoke: async () => ({ data: null, error: new Error('Supabase not configured') }),
   },
+  channel: () => ({
+    on: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }),
+    subscribe: () => ({ unsubscribe: () => {} }),
+  }),
 } as unknown as SupabaseClient

@@ -21,13 +21,21 @@ import {
   CloudUpload,
   Send,
   Inbox,
-  Ban
+  Ban,
+  Cloud,
+  CloudOff
 } from 'lucide-react'
 import type { ResultWithDetails } from '@/types'
 
 interface StudentResult extends ResultWithDetails {
   full_name: string
   matric_no: string
+  level?: number
+  semester?: number
+  course?: string
+  source?: string
+  auto_dispatched_at?: string
+  student_level?: number
 }
 
 interface UploadProgress {
@@ -40,7 +48,30 @@ interface UploadProgress {
 interface UploadResult {
   success: boolean
   matricNo?: string
+  level?: number
+  semester?: number
   error?: string
+}
+
+// Helper function to get ordinal suffix (st, nd, rd, th)
+function getOrdinalSuffix(n: number): string {
+  const lastDigit = n % 10
+  const lastTwoDigits = n % 100
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+    return "th"
+  }
+
+  switch (lastDigit) {
+    case 1:
+      return "st"
+    case 2:
+      return "nd"
+    case 3:
+      return "rd"
+    default:
+      return "th"
+  }
 }
 
 function parseMatricFromFilename(filename: string): UploadResult {
@@ -50,20 +81,41 @@ function parseMatricFromFilename(filename: string): UploadResult {
     return { success: false, error: 'Not a PDF file' }
   }
 
-  // Support patterns: 19010301081_S2.pdf, 19010301081.pdf, 19010301081-S2.pdf
+  // Support patterns:
+  // - 19010301081.pdf (just matric)
+  // - 19010301081_S2.pdf (matric + semester)
+  // - 19010301081_400_S2.pdf (matric + level + semester)
+  // - 19010301081_400.pdf (matric + level)
   const patterns = [
-    /^(\d{11})[_-]/,           // 19010301081_ or 19010301081-
-    /^(\d{11})(?=\.pdf$)/i,    // 19010301081.pdf (just the number)
+    // Pattern: MATRIC_LEVEL_SEMESTER (e.g., 19010301081_400_S2.pdf)
+    { regex: /^(\d{11})[_-](\d{3})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: true, hasSemester: true },
+    // Pattern: MATRIC_SEMESTER (e.g., 19010301081_S2.pdf)
+    { regex: /^(\d{11})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: false, hasSemester: true },
+    // Pattern: MATRIC_LEVEL (e.g., 19010301081_400.pdf)
+    { regex: /^(\d{11})[_-](\d{3})\.(pdf|PDF)$/i, hasLevel: true, hasSemester: false },
+    // Pattern: MATRIC only (e.g., 19010301081.pdf)
+    { regex: /^(\d{11})\.(pdf|PDF)$/i, hasLevel: false, hasSemester: false },
+    // Pattern: MATRIC with any suffix before .pdf (fallback)
+    { regex: /^(\d{11})[_-]/, hasLevel: false, hasSemester: false },
   ]
 
   for (const pattern of patterns) {
-    const match = filename.match(pattern)
+    const match = filename.match(pattern.regex)
     if (match) {
-      return { success: true, matricNo: match[1] }
+      const result: UploadResult = { success: true, matricNo: match[1] }
+      if (pattern.hasLevel) {
+        result.level = parseInt(match[2], 10)
+      }
+      if (pattern.hasSemester) {
+        // Match position depends on pattern
+        const semesterIndex = pattern.hasLevel ? 3 : 2
+        result.semester = parseInt(match[semesterIndex], 10)
+      }
+      return result
     }
   }
 
-  return { success: false, error: 'Filename must start with 11-digit matric number (e.g., 19010301081_S2.pdf)' }
+  return { success: false, error: 'Filename must start with 11-digit matric number (e.g., 19010301081_400_S2.pdf)' }
 }
 
 // Status Badge Component
@@ -148,43 +200,76 @@ export default function DashboardPage() {
   const [approving, setApproving] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([])
+  const [portalConfig, setPortalConfig] = useState<PortalConfig | null>(null)
+
+  const fetchPortalConfig = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('portal_config')
+        .select('sync_enabled, last_sync_at, last_sync_status, auto_dispatch_enabled')
+        .single()
+
+      if (error) {
+        console.error('Error fetching portal config:', error)
+        return
+      }
+
+      setPortalConfig(data)
+    } catch (err) {
+      console.error('Error fetching portal config:', err)
+    }
+  }, [])
 
   const fetchResults = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('results')
-      .select(`
-        id,
-        student_id,
-        pdf_url,
-        is_senate_approved,
-        dispatch_status,
-        created_at,
-        updated_at,
-        student:student_id (matric_no, full_name)
-      `)
-      .order('created_at', { ascending: false })
+    // Fetch results and students separately to avoid foreign key join issues
+    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: studentsError }] = await Promise.all([
+      supabase
+        .from('results')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('students')
+        .select('id, matric_no, full_name, programme, level')
+    ])
 
-    if (error) {
-      console.error('Error fetching results:', error)
+    if (resultsError) {
+      console.error('Error fetching results:', resultsError)
       toast({
         title: 'Error loading results',
-        description: error.message || 'Failed to fetch results. Please try again.',
+        description: resultsError.message || 'Failed to fetch results. Please try again.',
         variant: 'destructive',
       })
+      setLoading(false)
       return
     }
 
-    const mapped = (data || []).map((r: any) => ({
-      id: r.id,
-      student_id: r.student_id,
-      pdf_url: r.pdf_url,
-      is_senate_approved: r.is_senate_approved,
-      dispatch_status: r.dispatch_status,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-      matric_no: r.student?.matric_no,
-      full_name: r.student?.full_name,
-    }))
+    if (studentsError) {
+      console.error('Error fetching students:', studentsError)
+    }
+
+    // Create a lookup map for students (convert UUIDs to strings for consistent comparison)
+    const studentMap = new Map((studentsData || []).map(s => [String(s.id), s]))
+
+    const mapped = (resultsData || []).map((r: any) => {
+      const student = studentMap.get(String(r.student_id))
+      return {
+        id: r.id,
+        student_id: r.student_id,
+        pdf_url: r.pdf_url,
+        level: r.level,
+        semester: r.semester,
+        is_senate_approved: r.is_senate_approved,
+        dispatch_status: r.dispatch_status,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        source: r.source,
+        auto_dispatched_at: r.auto_dispatched_at,
+        matric_no: student?.matric_no,
+        full_name: student?.full_name,
+        course: student?.programme,
+        student_level: student?.level,
+      }
+    })
 
     setResults(mapped)
     setLoading(false)
@@ -192,7 +277,31 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchResults()
-  }, [fetchResults])
+    fetchPortalConfig()
+
+    // Subscribe to parent_contacts changes for realtime updates to Telegram status
+    const parentContactsChannel = supabase
+      .channel('parent_contacts_changes_dashboard')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'parent_contacts' },
+        () => fetchResults()
+      )
+      .subscribe()
+
+    // Subscribe to results changes for realtime updates to dispatch status
+    const resultsChannel = supabase
+      .channel('results_changes_dashboard')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'results' },
+        () => fetchResults()
+      )
+      .subscribe()
+
+    return () => {
+      parentContactsChannel.unsubscribe()
+      resultsChannel.unsubscribe()
+    }
+  }, [fetchResults, fetchPortalConfig])
 
   // Calculate stats - check all parent types for dispatch status
   const isDispatched = (status: any) => {
@@ -234,6 +343,8 @@ export default function DashboardPage() {
     dispatched: results.filter(r => isDispatched(r.dispatch_status)).length,
     pendingSenate: results.filter(r => !r.is_senate_approved).length,
     failed: results.filter(r => isFailed(r.dispatch_status)).length,
+    portalResults: results.filter(r => r.source === 'portal').length,
+    autoDispatched: results.filter(r => r.auto_dispatched_at).length,
   }
 
   const handleDrag = (e: React.DragEvent) => {
@@ -333,6 +444,8 @@ export default function DashboardPage() {
       const { error: resultError } = await supabase.from('results').upsert({
         student_id: studentData.id,
         pdf_url: urlData.publicUrl,
+        level: parseResult.level || null,
+        semester: parseResult.semester || null,
         is_senate_approved: false,
         dispatch_status: null,
       }, { onConflict: 'student_id' })
@@ -553,7 +666,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           title="Total Results"
           value={stats.total}
@@ -583,6 +696,52 @@ export default function DashboardPage() {
           icon={AlertCircle}
           color="purple"
         />
+        <Card className={`border overflow-hidden ${portalConfig?.sync_enabled ? 'border-blue-200' : 'border-slate-200'}`}>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Portal Sync</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2">
+                  {portalConfig?.sync_enabled ? (
+                    <span className="inline-flex items-center gap-1.5 text-mtu-green">
+                      <Cloud className="h-6 w-6" />
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-slate-400">
+                      <CloudOff className="h-6 w-6" />
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {portalConfig?.sync_enabled
+                    ? `Last: ${portalConfig?.last_sync_at ? new Date(portalConfig.last_sync_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}`
+                    : 'Automatic sync disabled'}
+                </p>
+              </div>
+              <div className={`p-3 rounded-xl ${portalConfig?.sync_enabled ? 'bg-blue-50' : 'bg-slate-50'}`}>
+                {portalConfig?.sync_enabled ? (
+                  <Cloud className="h-5 w-5 text-blue-500" />
+                ) : (
+                  <CloudOff className="h-5 w-5 text-slate-400" />
+                )}
+              </div>
+            </div>
+            {stats.portalResults > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">From portal:</span>
+                  <span className="font-medium text-slate-700">{stats.portalResults} results</span>
+                </div>
+                {stats.autoDispatched > 0 && (
+                  <div className="flex items-center justify-between text-xs mt-1">
+                    <span className="text-slate-500">Auto-dispatched:</span>
+                    <span className="font-medium text-mtu-green">{stats.autoDispatched}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Upload Dropzone */}
@@ -593,7 +752,7 @@ export default function DashboardPage() {
             Upload Result PDFs
           </CardTitle>
           <CardDescription>
-            Drag and drop PDF files or click to browse. Files must follow naming convention: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_S2.pdf</code>
+            Drag and drop PDF files or click to browse. Files should follow naming convention: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S2.pdf</code> (matric_level_semester)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -710,6 +869,9 @@ export default function DashboardPage() {
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Course</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Level</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Semester</TableHead>
                     <TableHead className="font-semibold text-slate-700">PDF</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate</TableHead>
                     <TableHead className="font-semibold text-slate-700 text-center">Email</TableHead>
@@ -731,6 +893,15 @@ export default function DashboardPage() {
                       </TableCell>
                       <TableCell className="font-medium text-slate-900">
                         {result.full_name}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {result.course || '-'}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {result.level ? `${result.level}L` : '-'}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {result.semester ? `${result.semester}${getOrdinalSuffix(result.semester)}` : '-'}
                       </TableCell>
                       <TableCell>
                         <StatusBadge
@@ -757,7 +928,7 @@ export default function DashboardPage() {
                   ))}
                   {results.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12">
+                      <TableCell colSpan={11} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />

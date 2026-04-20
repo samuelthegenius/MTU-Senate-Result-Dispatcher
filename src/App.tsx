@@ -10,6 +10,7 @@ import AdminPage from '@/pages/Admin'
 import ResultsPage from '@/pages/Results'
 import ParentsPage from '@/pages/Parents'
 import StudentsPage from '@/pages/Students'
+import PortalSettingsPage from '@/pages/PortalSettings'
 
 // Wrapper component that applies Layout to authenticated routes
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,14 @@ function App() {
             element={
               <AuthenticatedLayout>
                 <StudentsPage />
+              </AuthenticatedLayout>
+            }
+          />
+          <Route
+            path="/portal"
+            element={
+              <AuthenticatedLayout>
+                <PortalSettingsPage />
               </AuthenticatedLayout>
             }
           />

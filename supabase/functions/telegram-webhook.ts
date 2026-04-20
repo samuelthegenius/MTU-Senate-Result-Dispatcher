@@ -36,6 +36,11 @@ interface TelegramUpdate {
   }
 }
 
+interface Student {
+  full_name: string
+  matric_no: string
+}
+
 interface ParentContact {
   id: string
   student_id: string
@@ -46,9 +51,18 @@ interface ParentContact {
   telegram_id: string | null
   telegram_chat_id: string | null
   verification_token: string | null
-  student: {
-    full_name: string
-    matric_no: string
+  student: Student[] | null
+}
+
+interface TelegramMessageBody {
+  chat_id: number
+  text: string
+  parse_mode: "HTML" | "Markdown" | "MarkdownV2"
+  reply_markup?: {
+    keyboard?: Array<Array<{ text: string; request_contact?: boolean }>>
+    one_time_keyboard?: boolean
+    resize_keyboard?: boolean
+    remove_keyboard?: boolean
   }
 }
 
@@ -85,7 +99,7 @@ if (TELEGRAM_BOT_TOKEN) {
   console.warn("TELEGRAM_BOT_TOKEN not set, skipping bot command setup")
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
   }
@@ -131,7 +145,7 @@ serve(async (req) => {
           .single()
 
         if (existingContact) {
-          const studentName = (existingContact.student as any)?.full_name || "your child"
+          const studentName = existingContact.student?.[0]?.full_name || "your child"
           await sendTelegramMessage(
             telegramBotToken,
             chatId,
@@ -205,7 +219,7 @@ You are set up to receive results for <b>${studentName}</b>.
 
         // Send success message
         const parentName = message.from.first_name
-        const studentName = (parentContact.student as any)?.full_name || "your child"
+        const studentName = parentContact.student?.[0]?.full_name || "your child"
 
         let welcomeMessage: string
         if (hadPreviousChatId) {
@@ -292,7 +306,7 @@ You are set up to receive results for <b>${studentName}</b>.
           "Your account is not yet linked. Send /start to begin verification."
         )
       } else {
-        const studentName = (parentContact.student as any)?.full_name || "your child"
+        const studentName = parentContact.student?.[0]?.full_name || "your child"
         await sendTelegramMessage(
           telegramBotToken,
           chatId,
@@ -382,7 +396,7 @@ You are set up to receive results for <b>${studentName}</b>.
 
       // Send success message
       const parentName = message.from.first_name
-      const studentName = (parentContact.student as any)?.full_name || "your child"
+      const studentName = parentContact.student?.[0]?.full_name || "your child"
 
       let successMessage: string
       if (hadPreviousChatId) {
@@ -428,7 +442,8 @@ You are set up to receive results for <b>${studentName}</b>.
     })
   } catch (error) {
     console.error("Telegram webhook error:", error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
@@ -442,7 +457,7 @@ async function sendTelegramMessage(
   text: string,
   options: { remove_keyboard?: boolean } = {}
 ): Promise<void> {
-  const body: any = {
+  const body: TelegramMessageBody = {
     chat_id: chatId,
     text,
     parse_mode: "HTML",

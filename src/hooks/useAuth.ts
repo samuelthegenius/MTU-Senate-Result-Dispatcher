@@ -207,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, retryCount = 0): Promise<{ error: Error | null }> => {
     if (!hasSupabase()) {
       console.error('[Auth] Supabase not configured')
       return { error: new Error('Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.') }
@@ -222,28 +222,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: new Error('Only @mtu.edu.ng emails are allowed to sign in.') }
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail,
-      password: trimmedPassword
-    })
-    
-    if (error) {
-      console.error('[Auth] Sign in error:', error.message)
-      if (error.message.includes('Invalid login credentials')) {
-        return { error: new Error('Invalid email or password. Please check your credentials.') }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: trimmedPassword
+      })
+      
+      if (error) {
+        console.error('[Auth] Sign in error:', error.message)
+        if (error.message.includes('Invalid login credentials')) {
+          return { error: new Error('Invalid email or password. Please check your credentials.') }
+        }
+        if (error.message.includes('Email not confirmed')) {
+          return { error: new Error('Please verify your email before signing in.') }
+        }
+        return { error: new Error(error.message) }
       }
-      if (error.message.includes('Email not confirmed')) {
-        return { error: new Error('Please verify your email before signing in.') }
+      
+      if (!data.user) {
+        console.error('[Auth] No user data returned')
+        return { error: new Error('Login failed. User account not found.') }
       }
-      return { error: new Error(error.message) }
+      
+      return { error: null }
+    } catch (err: any) {
+      // Handle transient network errors (ERR_NETWORK_CHANGED, Failed to fetch, etc.)
+      const isNetworkError = err?.message?.includes('Failed to fetch') || 
+                              err?.message?.includes('NetworkError') ||
+                              err?.message?.includes('network') ||
+                              err?.message?.includes('ERR_NETWORK')
+      
+      if (isNetworkError && retryCount < 2) {
+        console.warn(`[Auth] Network error during sign in, retrying (${retryCount + 1}/2)...`)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return signIn(email, password, retryCount + 1)
+      }
+      
+      console.error('[Auth] Sign in error:', err)
+      return { error: new Error(err?.message || 'Network error during sign in. Please check your connection and try again.') }
     }
-    
-    if (!data.user) {
-      console.error('[Auth] No user data returned')
-      return { error: new Error('Login failed. User account not found.') }
-    }
-    
-    return { error: null }
   }
 
   const signOut = async () => {
