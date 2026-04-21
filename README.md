@@ -31,6 +31,7 @@
      - `add_student_course_level.sql` - adds course/level to students
      - `rename_course_to_programme.sql` - renames course column
      - `add_cron_job.sql` - sets up pg_cron scheduled sync (optional)
+     - `fix_duplicate_portal_config.sql` - enforces single row constraint on portal_config
    - Configure storage bucket `result_pdfs`
    - Deploy all Edge Functions:
      ```bash
@@ -39,7 +40,6 @@
      supabase functions deploy fetch-portal-data
      supabase functions deploy cleanup-storage
      supabase functions deploy scheduled-portal-sync
-     supabase functions deploy get-encryption-key
      ```
 
 5. **Troubleshooting (if needed):**
@@ -59,12 +59,19 @@
 - `VITE_TELEGRAM_BOT_USERNAME` - your Telegram bot username (without @)
 
 ### Backend (Supabase Edge Function Secrets)
+- `SUPABASE_URL` - your Supabase project URL (same as VITE_SUPABASE_URL)
+- `SUPABASE_SERVICE_ROLE_KEY` - your Supabase service role key (for admin operations)
 - `BREVO_API_KEY` - for email via Brevo (300 emails/day free, forever)
 - `BREVO_FROM_EMAIL` - sender email address to display
 - `TELEGRAM_BOT_TOKEN` - for Telegram bot (completely free)
+- `TELEGRAM_WEBHOOK_SECRET` - random secret to validate Telegram webhook requests
 - `GREENAPI_INSTANCE_ID` - Green API instance ID for WhatsApp
 - `GREENAPI_API_TOKEN` - Green API token for WhatsApp
+- `PORTAL_ENCRYPTION_KEY` - strong 32+ character key for encrypting portal credentials
 - `CRON_SECRET` - secret key for authenticating scheduled sync calls (any random string)
+
+### CORS Configuration
+- `ALLOWED_ORIGINS` - comma-separated list of allowed origins (defaults to localhost)
 
 ## Brevo Setup
 
@@ -145,7 +152,6 @@ The system can automatically fetch student results from the MTU student portal (
 |----------|---------|
 | `fetch-portal-data` | Fetch students and results from MTU portal |
 | `scheduled-portal-sync` | Cron-triggered sync with authentication |
-| `get-encryption-key` | Provides encryption key for portal credentials |
 | `cleanup-storage` | Remove orphaned PDFs from storage |
 | `process-dispatch` | Send results via Email/Telegram/WhatsApp |
 | `telegram-webhook` | Handle Telegram bot interactions |
