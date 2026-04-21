@@ -267,7 +267,7 @@ export default function DashboardPage() {
         auto_dispatched_at: r.auto_dispatched_at,
         matric_no: student?.matric_no,
         full_name: student?.full_name,
-        course: student?.programme,
+        programme: student?.programme,
         student_level: student?.level,
       }
     })
@@ -867,7 +867,7 @@ export default function DashboardPage() {
                     </TableHead>
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
-                    <TableHead className="font-semibold text-slate-700">Course</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Programme</TableHead>
                     <TableHead className="font-semibold text-slate-700">Level</TableHead>
                     <TableHead className="font-semibold text-slate-700">Semester</TableHead>
                     <TableHead className="font-semibold text-slate-700">PDF</TableHead>
@@ -893,7 +893,7 @@ export default function DashboardPage() {
                         {result.full_name}
                       </TableCell>
                       <TableCell className="text-slate-600">
-                        {result.course || '-'}
+                        {result.programme || '-'}
                       </TableCell>
                       <TableCell className="text-slate-600">
                         {result.level ? `${result.level}L` : '-'}
