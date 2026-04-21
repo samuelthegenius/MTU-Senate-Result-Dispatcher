@@ -57,6 +57,7 @@ interface UploadResult {
   matricNo?: string
   level?: number
   semester?: number
+  resultType?: 'regular' | 'supplementary'
   error?: string
 }
 
@@ -90,20 +91,31 @@ function parseMatricFromFilename(filename: string): UploadResult {
 
   // Support patterns:
   // - 19010301081.pdf (just matric)
-  // - 19010301081_S2.pdf (matric + semester)
+  // - 19010301081_S1.pdf (matric + 1st semester)
+  // - 19010301081_S2.pdf (matric + 2nd semester)
   // - 19010301081_400_S2.pdf (matric + level + semester)
   // - 19010301081_400.pdf (matric + level)
+  // - 19010301081_SUP.pdf (matric + supplementary, no semester - happens after S2)
+  // - 19010301081_400_SUP.pdf (matric + level + supplementary, no semester)
   const patterns = [
+    // Pattern: MATRIC_LEVEL_SEMESTER_SUPP (e.g., 19010301081_400_S2_SUP.pdf)
+    { regex: /^(\d{11})[_-](\d{3})[_-]S(\d)[_-]SUP\.(pdf|PDF)$/i, hasLevel: true, hasSemester: true, hasSupplementary: true },
+    // Pattern: MATRIC_SEMESTER_SUPP (e.g., 19010301081_S2_SUP.pdf)
+    { regex: /^(\d{11})[_-]S(\d)[_-]SUP\.(pdf|PDF)$/i, hasLevel: false, hasSemester: true, hasSupplementary: true },
+    // Pattern: MATRIC_LEVEL_SUPP (e.g., 19010301081_400_SUP.pdf)
+    { regex: /^(\d{11})[_-](\d{3})[_-]SUP\.(pdf|PDF)$/i, hasLevel: true, hasSemester: false, hasSupplementary: true },
+    // Pattern: MATRIC_SUPP only (e.g., 19010301081_SUP.pdf)
+    { regex: /^(\d{11})[_-]SUP\.(pdf|PDF)$/i, hasLevel: false, hasSemester: false, hasSupplementary: true },
     // Pattern: MATRIC_LEVEL_SEMESTER (e.g., 19010301081_400_S2.pdf)
-    { regex: /^(\d{11})[_-](\d{3})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: true, hasSemester: true },
+    { regex: /^(\d{11})[_-](\d{3})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: true, hasSemester: true, hasSupplementary: false },
     // Pattern: MATRIC_SEMESTER (e.g., 19010301081_S2.pdf)
-    { regex: /^(\d{11})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: false, hasSemester: true },
+    { regex: /^(\d{11})[_-]S(\d)\.(pdf|PDF)$/i, hasLevel: false, hasSemester: true, hasSupplementary: false },
     // Pattern: MATRIC_LEVEL (e.g., 19010301081_400.pdf)
-    { regex: /^(\d{11})[_-](\d{3})\.(pdf|PDF)$/i, hasLevel: true, hasSemester: false },
+    { regex: /^(\d{11})[_-](\d{3})\.(pdf|PDF)$/i, hasLevel: true, hasSemester: false, hasSupplementary: false },
     // Pattern: MATRIC only (e.g., 19010301081.pdf)
-    { regex: /^(\d{11})\.(pdf|PDF)$/i, hasLevel: false, hasSemester: false },
+    { regex: /^(\d{11})\.(pdf|PDF)$/i, hasLevel: false, hasSemester: false, hasSupplementary: false },
     // Pattern: MATRIC with any suffix before .pdf (fallback)
-    { regex: /^(\d{11})[_-]/, hasLevel: false, hasSemester: false },
+    { regex: /^(\d{11})[_-]/, hasLevel: false, hasSemester: false, hasSupplementary: false },
   ]
 
   for (const pattern of patterns) {
@@ -114,9 +126,14 @@ function parseMatricFromFilename(filename: string): UploadResult {
         result.level = parseInt(match[2], 10)
       }
       if (pattern.hasSemester) {
-        // Match position depends on pattern
+        // Match position depends on whether level is present
         const semesterIndex = pattern.hasLevel ? 3 : 2
         result.semester = parseInt(match[semesterIndex], 10)
+      }
+      if (pattern.hasSupplementary) {
+        result.resultType = 'supplementary'
+      } else {
+        result.resultType = 'regular'
       }
       return result
     }
@@ -444,9 +461,10 @@ export default function DashboardPage() {
         pdf_url: urlData.publicUrl,
         level: parseResult.level || null,
         semester: parseResult.semester || null,
+        result_type: parseResult.resultType || 'regular',
         is_senate_approved: false,
         dispatch_status: null,
-      }, { onConflict: 'student_id' })
+      }, { onConflict: 'student_id,level,semester,result_type' })
 
       if (resultError) {
         console.error(`Result error for ${matricNo}:`, resultError)
@@ -750,7 +768,7 @@ export default function DashboardPage() {
             Upload Result PDFs
           </CardTitle>
           <CardDescription>
-            Drag and drop PDF files or click to browse. Files should follow naming convention: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S2.pdf</code> (matric_level_semester)
+            Drag and drop PDF files or click to browse. Naming: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S1.pdf</code> (1st sem), <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S2.pdf</code> (2nd sem), <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_SUP.pdf</code> (supplementary)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -870,6 +888,7 @@ export default function DashboardPage() {
                     <TableHead className="font-semibold text-slate-700">Programme</TableHead>
                     <TableHead className="font-semibold text-slate-700">Level</TableHead>
                     <TableHead className="font-semibold text-slate-700">Semester</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Type</TableHead>
                     <TableHead className="font-semibold text-slate-700">PDF</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate</TableHead>
                     <TableHead className="font-semibold text-slate-700 text-center">Email</TableHead>
@@ -899,7 +918,20 @@ export default function DashboardPage() {
                         {result.level ? `${result.level}L` : '-'}
                       </TableCell>
                       <TableCell className="text-slate-600">
-                        {result.semester ? `${result.semester}${getOrdinalSuffix(result.semester)}` : '-'}
+                        {result.semester
+                          ? `${result.semester}${getOrdinalSuffix(result.semester)}`
+                          : result.result_type === 'supplementary'
+                            ? 'Supplementary'
+                            : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          result.result_type === 'supplementary'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {result.result_type === 'supplementary' ? 'Supplementary' : 'Regular'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <StatusBadge

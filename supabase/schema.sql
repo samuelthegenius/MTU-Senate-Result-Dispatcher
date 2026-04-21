@@ -26,14 +26,16 @@ CREATE TABLE IF NOT EXISTS parent_contacts (
 -- Create results table
 CREATE TABLE IF NOT EXISTS results (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID REFERENCES students(id) ON DELETE CASCADE UNIQUE,
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
   pdf_url TEXT,
   level INTEGER, -- e.g., 100, 200, 300, 400, 500
   semester INTEGER, -- e.g., 1 or 2
+  result_type TEXT DEFAULT 'regular' CHECK (result_type IN ('regular', 'supplementary')), -- regular or supplementary/resit
   is_senate_approved BOOLEAN DEFAULT FALSE,
   dispatch_status JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(student_id, level, semester, result_type)
 );
 
 -- Staff table for user profiles and roles
@@ -189,6 +191,7 @@ CREATE POLICY "Staff can delete PDFs" ON storage.objects
 CREATE INDEX IF NOT EXISTS idx_students_matric ON students(matric_no);
 CREATE INDEX IF NOT EXISTS idx_results_student ON results(student_id);
 CREATE INDEX IF NOT EXISTS idx_results_approved ON results(is_senate_approved);
+CREATE INDEX IF NOT EXISTS idx_results_type ON results(result_type);
 
 -- Create trigger function to invoke dispatch when senate approval happens
 CREATE OR REPLACE FUNCTION trigger_dispatch_on_approval()
