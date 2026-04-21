@@ -28,10 +28,12 @@
      - `add_portal_integration.sql` - adds portal sync tables and config
      - `add_portal_helpers.sql` - helper functions for portal integration
      - `add_results_level_semester.sql` - adds level/semester columns
+     - `add_result_type.sql` - adds result_type column to results table
      - `add_student_course_level.sql` - adds course/level to students
      - `rename_course_to_programme.sql` - renames course column
      - `add_cron_job.sql` - sets up pg_cron scheduled sync (optional)
      - `fix_duplicate_portal_config.sql` - enforces single row constraint on portal_config
+     - `fix_results_unique_constraint.sql` - fixes unique constraint on results table
    - Configure storage bucket `result_pdfs`
    - Deploy all Edge Functions:
      ```bash
