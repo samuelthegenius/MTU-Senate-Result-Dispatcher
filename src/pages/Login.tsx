@@ -32,7 +32,6 @@ export default function LoginPage() {
     const { error } = await signIn(email, password)
 
     if (error) {
-      console.error('[Login] Sign in error:', error)
       toast({
         title: 'Sign in failed',
         description: error.message,

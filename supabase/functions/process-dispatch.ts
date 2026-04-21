@@ -36,10 +36,35 @@ interface DispatchStatus {
   whatsapp?: { success: boolean; message?: string; timestamp?: string }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Allowed origins for CORS - supports local dev and production
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS")
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean)
+  }
+  // Default origins if not configured
+  return [
+    "http://localhost:5173",
+    "https://mturesults.app",
+    "https://www.mturesults.app",
+  ]
+}
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const allowedOrigins = getAllowedOrigins()
+  const origin = req.headers.get("origin")
+  
+  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
+  const allowOrigin = !origin || allowedOrigins.includes(origin) 
+    ? (origin || allowedOrigins[0]) 
+    : allowedOrigins[0]
+  
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  }
 }
 
 // Helper function to get ordinal suffix (st, nd, rd, th)
@@ -101,7 +126,7 @@ function buildResultDetailsHTML(student: Student, level?: number, semester?: num
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: getCorsHeaders(req) })
   }
 
   try {
@@ -115,7 +140,7 @@ serve(async (req: Request) => {
     if (!userJwt) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -138,7 +163,7 @@ serve(async (req: Request) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -269,9 +294,7 @@ serve(async (req: Request) => {
 
           let emailMessage = "Email sent with attachment"
           if (!emailResponse.ok) {
-            const errorBody = await emailResponse.text()
-            console.error("[process-dispatch] Brevo error:", emailResponse.status, errorBody)
-            emailMessage = `Email failed: ${emailResponse.status} - ${errorBody}`
+            emailMessage = `Email failed: ${emailResponse.status}`
           }
 
           parentStatus.email = {
@@ -286,11 +309,10 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e)
+      } catch {
         parentStatus.email = {
           success: false,
-          message: errorMessage,
+          message: "Email dispatch failed",
           timestamp,
         }
       }
@@ -350,11 +372,10 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e)
+      } catch {
         parentStatus.telegram = {
           success: false,
-          message: errorMessage,
+          message: "Telegram dispatch failed",
           timestamp,
         }
       }
@@ -420,12 +441,10 @@ serve(async (req: Request) => {
             timestamp,
           }
         }
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e)
-        console.error("[process-dispatch] Green API error:", e)
+      } catch {
         parentStatus.whatsapp = {
           success: false,
-          message: errorMessage,
+          message: "WhatsApp dispatch failed",
           timestamp,
         }
       }
@@ -446,18 +465,14 @@ serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({ success: true, status }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-    console.error("[process-dispatch] Error:", error)
+  } catch {
     return new Response(JSON.stringify({ 
-      error: errorMessage,
-      stack: errorStack 
+      error: "Dispatch processing failed"
     }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
   }
 })

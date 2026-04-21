@@ -1,16 +1,29 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/hooks/useAuth'
 import { AuthGuard } from '@/components/AuthGuard'
 import { Layout } from '@/components/Layout'
 import { Toaster } from '@/components/ui/toaster'
-import LoginPage from '@/pages/Login'
-import SignupPage from '@/pages/Signup'
-import DashboardPage from '@/pages/Dashboard'
-import AdminPage from '@/pages/Admin'
-import ResultsPage from '@/pages/Results'
-import ParentsPage from '@/pages/Parents'
-import StudentsPage from '@/pages/Students'
-import PortalSettingsPage from '@/pages/PortalSettings'
+import { Loader2 } from 'lucide-react'
+
+// Lazy load pages for code splitting
+const LoginPage = lazy(() => import('@/pages/Login'))
+const SignupPage = lazy(() => import('@/pages/Signup'))
+const DashboardPage = lazy(() => import('@/pages/Dashboard'))
+const AdminPage = lazy(() => import('@/pages/Admin'))
+const ResultsPage = lazy(() => import('@/pages/Results'))
+const ParentsPage = lazy(() => import('@/pages/Parents'))
+const StudentsPage = lazy(() => import('@/pages/Students'))
+const PortalSettingsPage = lazy(() => import('@/pages/PortalSettings'))
+
+// Loading fallback for lazy-loaded routes
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="h-8 w-8 animate-spin text-mtu-purple" />
+    </div>
+  )
+}
 
 // Wrapper component that applies Layout to authenticated routes
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -25,9 +38,10 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
           <Route
             path="/"
             element={
@@ -76,8 +90,9 @@ function App() {
               </AuthenticatedLayout>
             }
           />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
       <Toaster />
     </AuthProvider>

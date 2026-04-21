@@ -49,15 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await new Promise(resolve => setTimeout(resolve, 500))
             return fetchStaffData(userId, retryCount + 1)
           }
-          console.error('[Auth] Staff query error:', error)
           return null
         }
 
         if (staffData) {
           return { role: staffData.role, is_active: staffData.is_active, full_name: staffData.full_name }
         }
-      } catch (error: any) {
-        console.error('[Auth] Error fetching staff role:', error)
+      } catch {
         // Retry on network errors up to 2 times
         if (retryCount < 2) {
           await new Promise(resolve => setTimeout(resolve, 500))
@@ -126,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted) return
         
         if (error) {
-          console.error('[Auth] getSession error:', error)
+          // Session retrieval failed - continue as unauthenticated
         }
         
         setSession(session)
@@ -155,8 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         clearTimeout(safetyTimeout)
         setLoading(false)
-      } catch (err) {
-        console.error('[Auth] getSession error:', err)
+      } catch {
         clearTimeout(safetyTimeout)
         if (mounted) {
           setUser(null)
@@ -209,7 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string, retryCount = 0): Promise<{ error: Error | null }> => {
     if (!hasSupabase()) {
-      console.error('[Auth] Supabase not configured')
       return { error: new Error('Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.') }
     }
 
@@ -218,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const emailDomain = trimmedEmail.split('@')[1]
     if (emailDomain !== 'mtu.edu.ng') {
-      console.error('[Auth] Invalid domain:', emailDomain)
       return { error: new Error('Only @mtu.edu.ng emails are allowed to sign in.') }
     }
 
@@ -229,7 +224,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       
       if (error) {
-        console.error('[Auth] Sign in error:', error.message)
         if (error.message.includes('Invalid login credentials')) {
           return { error: new Error('Invalid email or password. Please check your credentials.') }
         }
@@ -240,7 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (!data.user) {
-        console.error('[Auth] No user data returned')
         return { error: new Error('Login failed. User account not found.') }
       }
       
@@ -253,12 +246,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                               err?.message?.includes('ERR_NETWORK')
       
       if (isNetworkError && retryCount < 2) {
-        console.warn(`[Auth] Network error during sign in, retrying (${retryCount + 1}/2)...`)
         await new Promise(resolve => setTimeout(resolve, 1000))
         return signIn(email, password, retryCount + 1)
       }
       
-      console.error('[Auth] Sign in error:', err)
       return { error: new Error(err?.message || 'Network error during sign in. Please check your connection and try again.') }
     }
   }

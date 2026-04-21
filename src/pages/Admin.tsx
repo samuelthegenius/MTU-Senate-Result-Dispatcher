@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertCircle, CheckCircle, Loader2, Users, UserPlus, Mail, Shield, Crown } from 'lucide-react'
@@ -51,7 +52,6 @@ export default function AdminPage() {
       if (error) throw error
       setStaff(data || [])
     } catch (error: any) {
-      console.error('Error fetching staff:', error)
       toast({
         title: 'Error loading staff',
         description: error?.message || 'Failed to fetch staff data. Please try again.',
@@ -72,7 +72,6 @@ export default function AdminPage() {
       if (error) throw error
       setInvites(data || [])
     } catch (error: any) {
-      console.error('Error fetching invites:', error)
       toast({
         title: 'Error loading invites',
         description: error?.message || 'Failed to fetch invitations. Please try again.',
@@ -110,8 +109,7 @@ export default function AdminPage() {
         description: `Invitation sent to ${newStaffEmail}`,
         variant: 'success',
       })
-    } catch (error) {
-      console.error('Error creating invite:', error)
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to create invitation. Please try again.',
@@ -142,8 +140,7 @@ export default function AdminPage() {
           staffMember.id === staffId ? { ...staffMember, is_active: !isActive } : staffMember
         )
       )
-    } catch (error) {
-      console.error('Error updating staff status:', error)
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update staff status. Please try again.',
@@ -177,8 +174,7 @@ export default function AdminPage() {
           staffMember.id === staffId ? { ...staffMember, role: newRole } : staffMember
         )
       )
-    } catch (error) {
-      console.error('Error updating staff role:', error)
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to update staff role. Please try again.',
@@ -211,8 +207,7 @@ export default function AdminPage() {
         description: 'Invitation revoked successfully.',
         variant: 'success',
       })
-    } catch (error) {
-      console.error('Error revoking invite:', error)
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to revoke invitation. Please try again.',
@@ -567,9 +562,4 @@ export default function AdminPage() {
       </div>
     </div>
   )
-}
-
-// Helper component for labels (since we don't have Label component from shadcn)
-function Label({ htmlFor, ...props }: { htmlFor: string } & React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label htmlFor={htmlFor} {...props} />
 }

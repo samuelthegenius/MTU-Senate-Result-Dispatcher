@@ -66,7 +66,6 @@ export default function ParentsPage() {
     ])
 
     if (contactsRes.error) {
-      console.error('Error fetching contacts:', contactsRes.error)
       toast({
         title: 'Error loading contacts',
         description: contactsRes.error.message || 'Failed to fetch parent contacts',
@@ -93,11 +92,7 @@ export default function ParentsPage() {
       setContacts(mapped)
     }
 
-    if (studentsRes.error) {
-      console.error('Error fetching students:', studentsRes.error)
-    } else {
-      setStudents(studentsRes.data || [])
-    }
+    setStudents(studentsRes.data || [])
 
     setLoading(false)
   }, [])
@@ -143,8 +138,6 @@ export default function ParentsPage() {
       }, { onConflict: 'student_id,parent_type' })
 
     if (error) {
-      console.error('Error saving contact:', error)
-
       // Handle specific error cases
       let errorMessage = 'Failed to save contact. Please try again.'
 
@@ -206,7 +199,6 @@ export default function ParentsPage() {
       .eq('id', contact.id)
 
     if (error) {
-      console.error('Error deleting contact:', error)
       toast({
         title: 'Error',
         description: 'Failed to delete contact. Please try again.',
@@ -287,15 +279,23 @@ export default function ParentsPage() {
         return
       }
 
-      // Insert contacts
+      // Insert contacts - track existing contacts before batch to distinguish insert vs update
       let inserted = 0
       let updated = 0
       let failed = 0
+
+      // Create a set of existing contact keys (student_id + parent_type) before any upserts
+      const existingContactKeys = new Set(
+        contacts.map(c => `${c.student_id}:${c.parent_type}`)
+      )
 
       for (let i = 0; i < newContacts.length; i++) {
         const contact = newContacts[i]
         const studentId = studentMap.get(contact.matric_no)
         if (!studentId) continue
+
+        const contactKey = `${studentId}:${contact.parent_type}`
+        const wasExisting = existingContactKeys.has(contactKey)
 
         const { error } = await supabase
           .from('parent_contacts')
@@ -317,12 +317,13 @@ export default function ParentsPage() {
           }
           errors.push(`${contact.matric_no}: ${errorMsg}`)
         } else {
-          // Check if it was an insert or update by checking if contact already existed
-          const existingContact = contacts.find(c => c.student_id === studentId)
-          if (existingContact) {
+          // Check if it was an insert or update based on pre-batch state
+          if (wasExisting) {
             updated++
           } else {
             inserted++
+            // Add to set so duplicates in same batch are counted as updates
+            existingContactKeys.add(contactKey)
           }
         }
 
@@ -338,10 +339,6 @@ export default function ParentsPage() {
       }])
 
       await fetchData()
-
-      if (errors.length > 0) {
-        console.error('CSV import errors:', errors)
-      }
 
       setTimeout(() => setUploadProgress([]), 5000)
     }

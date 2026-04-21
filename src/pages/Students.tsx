@@ -70,7 +70,6 @@ export default function StudentsPage() {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching students:', error)
         toast({
           title: 'Error loading students',
           description: error.message || 'Failed to fetch students. Please try again.',
@@ -80,22 +79,14 @@ export default function StudentsPage() {
       }
 
       // Fetch results to check which students have results
-      const { data: resultsData, error: resultsError } = await supabase
+      const { data: resultsData } = await supabase
         .from('results')
         .select('student_id')
 
-      if (resultsError) {
-        console.error('Error fetching results:', resultsError)
-      }
-
       // Fetch parent contacts to check which students have contacts
-      const { data: contactsData, error: contactsError } = await supabase
+      const { data: contactsData } = await supabase
         .from('parent_contacts')
         .select('student_id')
-
-      if (contactsError) {
-        console.error('Error fetching parent contacts:', contactsError)
-      }
 
       const studentsWithStatus = (data || []).map((student: Student) => ({
         ...student,
@@ -215,7 +206,6 @@ export default function StudentsPage() {
         })
 
       if (error) {
-        console.error('Error saving student:', error)
         if (error.code === '23505') {
           toast({
             title: 'Duplicate entry',
@@ -255,15 +245,13 @@ export default function StudentsPage() {
         body: { studentId, mode: 'single' }
       })
       if (cleanupError) {
-        console.warn('Failed to cleanup storage files:', cleanupError)
         toast({
           title: 'Storage cleanup warning',
           description: 'Could not clean up associated PDF files from storage. The student record will still be deleted, but some files may remain in storage.',
           variant: 'destructive',
         })
       }
-    } catch (e) {
-      console.warn('Storage cleanup error:', e)
+    } catch {
       toast({
         title: 'Storage service unavailable',
         description: 'The storage cleanup service is currently unavailable (CORS or network error). The student record will still be deleted.',
@@ -277,7 +265,6 @@ export default function StudentsPage() {
       .eq('id', studentId)
 
     if (error) {
-      console.error('Error deleting student:', error)
       toast({
         title: 'Delete failed',
         description: `Failed to delete student: ${error.message || 'Database error occurred'}. Please try again.`,

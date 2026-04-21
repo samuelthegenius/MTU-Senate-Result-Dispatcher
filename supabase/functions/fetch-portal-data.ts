@@ -41,23 +41,108 @@ interface SyncStats {
   errors: string[]
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Allowed origins for CORS - supports local dev and production
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS")
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean)
+  }
+  // Default origins if not configured
+  return [
+    "http://localhost:5173",
+    "https://mturesults.app",
+    "https://www.mturesults.app",
+  ]
 }
 
-// Simple XOR encryption for basic credential protection
-// In production, use proper encryption or store in Supabase Vault
-function decrypt(encrypted: string | null, key: string): string | null {
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const allowedOrigins = getAllowedOrigins()
+  const origin = req.headers.get("origin")
+  
+  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
+  const allowOrigin = !origin || allowedOrigins.includes(origin) 
+    ? (origin || allowedOrigins[0]) 
+    : allowedOrigins[0]
+  
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  }
+}
+
+// AES-256-GCM encryption/decryption using Web Crypto API
+// Credentials are encrypted before storage and decrypted only when needed
+
+const ALGORITHM = "AES-GCM"
+const IV_LENGTH = 12 // 96 bits for GCM
+const TAG_LENGTH = 128 // 128 bits authentication tag
+
+async function deriveKey(keyMaterial: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(keyMaterial)
+
+  // Use SHA-256 to derive a 256-bit key from the key material
+  const hashBuffer = await crypto.subtle.digest("SHA-256", keyData)
+
+  return await crypto.subtle.importKey(
+    "raw",
+    hashBuffer,
+    { name: ALGORITHM },
+    false,
+    ["encrypt", "decrypt"]
+  )
+}
+
+async function decrypt(encrypted: string | null, keyMaterial: string): Promise<string | null> {
   if (!encrypted) return null
   try {
-    const decoded = atob(encrypted)
-    let result = ''
-    for (let i = 0; i < decoded.length; i++) {
-      result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length))
+    // Parse the encrypted data format: base64(iv + ciphertext + tag)
+    const combined = new Uint8Array(atob(encrypted).split("").map(c => c.charCodeAt(0)))
+
+    if (combined.length < IV_LENGTH + 16) {
+      throw new Error("Invalid encrypted data format")
     }
-    return result
+
+    const iv = combined.slice(0, IV_LENGTH)
+    const ciphertext = combined.slice(IV_LENGTH)
+
+    const key = await deriveKey(keyMaterial)
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: ALGORITHM, iv, tagLength: TAG_LENGTH },
+      key,
+      ciphertext
+    )
+
+    return new TextDecoder().decode(decrypted)
+  } catch {
+    return null
+  }
+}
+
+// Encrypt function for storing credentials (used by the frontend or admin setup)
+export async function encrypt(plaintext: string | null, keyMaterial: string): Promise<string | null> {
+  if (!plaintext) return null
+  try {
+    const key = await deriveKey(keyMaterial)
+    const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
+    const encoder = new TextEncoder()
+    const data = encoder.encode(plaintext)
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: ALGORITHM, iv, tagLength: TAG_LENGTH },
+      key,
+      data
+    )
+
+    // Combine IV + ciphertext and encode as base64
+    const combined = new Uint8Array(iv.length + new Uint8Array(encrypted).length)
+    combined.set(iv)
+    combined.set(new Uint8Array(encrypted), iv.length)
+
+    return btoa(String.fromCharCode(...combined))
   } catch {
     return null
   }
@@ -65,8 +150,8 @@ function decrypt(encrypted: string | null, key: string): string | null {
 
 // Fetch authentication token from MTU portal
 async function authenticateWithPortal(config: PortalConfig, encryptionKey: string): Promise<string | null> {
-  const username = decrypt(config.encrypted_username ?? null, encryptionKey)
-  const password = decrypt(config.encrypted_password ?? null, encryptionKey)
+  const username = await decrypt(config.encrypted_username ?? null, encryptionKey)
+  const password = await decrypt(config.encrypted_password ?? null, encryptionKey)
 
   if (!username || !password) {
     throw new Error("Portal credentials not configured")
@@ -97,9 +182,8 @@ async function authenticateWithPortal(config: PortalConfig, encryptionKey: strin
     const data = await response.json()
     // TODO: Customize based on actual response structure
     return data.token || data.access_token || data.data?.token
-  } catch (error) {
-    console.error("[fetch-portal] Authentication error:", error)
-    throw error
+  } catch {
+    throw new Error("Portal authentication failed")
   }
 }
 
@@ -198,7 +282,10 @@ async function downloadAndStorePdf(
     }
 
     const pdfBuffer = await response.arrayBuffer()
-    const fileName = `${matricNo}_${Date.now()}.pdf`
+    // Use cryptographically secure random bytes for filename to prevent guessing
+    const randomBytes = crypto.getRandomValues(new Uint8Array(16))
+    const randomSuffix = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('')
+    const fileName = `${matricNo}_${randomSuffix}.pdf`
     const filePath = `portal/${fileName}`
 
     // Upload to Supabase Storage
@@ -219,8 +306,7 @@ async function downloadAndStorePdf(
       .getPublicUrl(filePath)
 
     return urlData.publicUrl
-  } catch (error) {
-    console.error(`[fetch-portal] Error downloading PDF for ${matricNo}:`, error)
+  } catch {
     return null
   }
 }
@@ -265,8 +351,7 @@ async function triggerDispatch(
     }
 
     return true
-  } catch (error) {
-    console.error(`[fetch-portal] Failed to trigger dispatch for ${resultId}:`, error)
+  } catch {
     return false
   }
 }
@@ -408,7 +493,7 @@ async function performPortalSync(
             .eq("id", resultRowId)
         }
       } else if (config.auto_dispatch_enabled && resultRowId && !isRecentlyPublished) {
-        console.log(`[fetch-portal] Skipping dispatch for ${result.portal_result_id}: published at ${result.published_at} (not recent)`)
+        // Skip dispatch for old results - not recently published
       }
     } catch (error) {
       stats.errors.push(`Result ${result.portal_result_id}: ${error instanceof Error ? error.message : String(error)}`)
@@ -420,13 +505,20 @@ async function performPortalSync(
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: getCorsHeaders(req) })
   }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    const encryptionKey = Deno.env.get("PORTAL_ENCRYPTION_KEY") || supabaseServiceKey.slice(0, 32)
+    const encryptionKey = Deno.env.get("PORTAL_ENCRYPTION_KEY")
+
+    if (!encryptionKey) {
+      return new Response(JSON.stringify({ error: "PORTAL_ENCRYPTION_KEY not configured" }), {
+        status: 500,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
+    }
 
     // Get user JWT from Authorization header
     const authHeader = req.headers.get("authorization")
@@ -435,7 +527,7 @@ serve(async (req: Request) => {
     if (!userJwt) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -450,7 +542,7 @@ serve(async (req: Request) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -486,7 +578,7 @@ serve(async (req: Request) => {
       .eq("id", config.id)
 
     if (updateError) {
-      console.error("[fetch-portal] Failed to update sync status:", updateError)
+      // Failed to update sync status - continue
     }
 
     // Create or use provided sync log
@@ -502,7 +594,7 @@ serve(async (req: Request) => {
         .single()
 
       if (syncLogError) {
-        console.error("[fetch-portal] Failed to create sync log:", syncLogError)
+        // Failed to create sync log - continue
       } else {
         syncLogId = syncLog?.id
       }
@@ -556,11 +648,15 @@ serve(async (req: Request) => {
         stats,
         syncId: syncLogId,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     )
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error("[fetch-portal] Error:", error)
+    // Log detailed error for server-side debugging but return generic message to client
+    const detailedError = error instanceof Error ? error.message : "Sync failed"
+    console.error("Portal sync error:", detailedError)
+
+    // Sanitize error message for client to prevent information leakage
+    const clientErrorMessage = "Portal synchronization failed. Please try again later."
 
     // Try to update sync status if we have a config
     try {
@@ -572,17 +668,17 @@ serve(async (req: Request) => {
         .from("portal_config")
         .update({
           last_sync_status: "error",
-          last_sync_message: errorMessage,
+          last_sync_message: detailedError, // Store detailed error server-side
           updated_at: new Date().toISOString(),
         })
         .eq("id", (await supabase.from("portal_config").select("id").single()).data?.id)
     } catch {
-      // Ignore errors in error handling
+      // Error handling failed - silent
     }
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: clientErrorMessage }),
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     )
   }
 })

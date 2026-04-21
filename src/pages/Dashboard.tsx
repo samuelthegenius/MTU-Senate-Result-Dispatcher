@@ -217,19 +217,18 @@ export default function DashboardPage() {
         .single()
 
       if (error) {
-        console.error('Error fetching portal config:', error)
         return
       }
 
       setPortalConfig(data)
-    } catch (err) {
-      console.error('Error fetching portal config:', err)
+    } catch {
+      // Config fetch failed - silent
     }
   }, [])
 
   const fetchResults = useCallback(async () => {
     // Fetch results and students separately to avoid foreign key join issues
-    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: studentsError }] = await Promise.all([
+    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: _studentsError }] = await Promise.all([
       supabase
         .from('results')
         .select('*')
@@ -240,7 +239,6 @@ export default function DashboardPage() {
     ])
 
     if (resultsError) {
-      console.error('Error fetching results:', resultsError)
       toast({
         title: 'Error loading results',
         description: resultsError.message || 'Failed to fetch results. Please try again.',
@@ -248,10 +246,6 @@ export default function DashboardPage() {
       })
       setLoading(false)
       return
-    }
-
-    if (studentsError) {
-      console.error('Error fetching students:', studentsError)
     }
 
     // Create a lookup map for students (convert UUIDs to strings for consistent comparison)
@@ -406,7 +400,6 @@ export default function DashboardPage() {
 
       if (!parseResult.success) {
         const errorMsg = parseResult.error || 'Invalid filename'
-        console.warn(`${file.name}: ${errorMsg}`)
         setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error', progress: 100, message: errorMsg } : p))
         errors.push(`${file.name}: ${errorMsg}`)
         continue
@@ -422,7 +415,6 @@ export default function DashboardPage() {
 
       if (!studentData) {
         const errorMsg = `Student not found for matric: ${matricNo}`
-        console.warn(errorMsg)
         toast({
           title: 'Student not found',
           description: `No student record found for matric number "${matricNo}". Please add the student in the Students page before uploading their result.`,
@@ -439,7 +431,6 @@ export default function DashboardPage() {
         .upload(filePath, file, { upsert: true })
 
       if (uploadError) {
-        console.error(`Upload error for ${file.name}:`, uploadError)
         setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error', progress: 100 } : p))
         continue
       }

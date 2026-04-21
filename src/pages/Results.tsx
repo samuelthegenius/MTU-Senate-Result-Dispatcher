@@ -25,7 +25,7 @@ export default function ResultsPage() {
 
   const fetchResults = useCallback(async () => {
     // Fetch results and students separately to avoid foreign key join issues
-    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: studentsError }] = await Promise.all([
+    const [{ data: resultsData, error: resultsError }, { data: studentsData, error: _studentsError }] = await Promise.all([
       supabase
         .from('results')
         .select('id, student_id, pdf_url, is_senate_approved, created_at')
@@ -36,7 +36,6 @@ export default function ResultsPage() {
     ])
 
     if (resultsError) {
-      console.error('Error fetching results:', resultsError)
       toast({
         title: 'Error loading results',
         description: resultsError.message || 'Failed to fetch results. Please try again.',
@@ -44,10 +43,6 @@ export default function ResultsPage() {
       })
       setLoading(false)
       return
-    }
-
-    if (studentsError) {
-      console.error('Error fetching students:', studentsError)
     }
 
     // Create a lookup map for students (convert UUIDs to strings for consistent comparison)
@@ -180,7 +175,6 @@ export default function ResultsPage() {
       .eq('id', resultId)
 
     if (error) {
-      console.error('Error deleting result:', error)
       toast({
         title: 'Delete failed',
         description: `Failed to delete result: ${error.message || 'Database error occurred'}. Please try again.`,

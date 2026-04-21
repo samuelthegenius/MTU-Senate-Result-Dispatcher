@@ -78,10 +78,9 @@ export default function PortalSettingsPage() {
       const { data, error } = await supabase
         .from('portal_config')
         .select('*')
-        .single()
+        .maybeSingle()
 
       if (error) {
-        console.error('Error fetching portal config:', error)
         toast({
           title: 'Error loading config',
           description: error.message,
@@ -99,8 +98,8 @@ export default function PortalSettingsPage() {
         setSyncInterval(data.sync_interval_minutes)
         setAutoDispatch(data.auto_dispatch_enabled)
       }
-    } catch (err) {
-      console.error('Error fetching config:', err)
+    } catch {
+      // Config fetch failed - silent
     }
   }, [toast])
 
@@ -113,13 +112,12 @@ export default function PortalSettingsPage() {
         .limit(10)
 
       if (error) {
-        console.error('Error fetching sync logs:', error)
         return
       }
 
       setSyncLogs(data || [])
-    } catch (err) {
-      console.error('Error fetching sync logs:', err)
+    } catch {
+      // Sync logs fetch failed - silent
     }
   }, [])
 
@@ -145,47 +143,45 @@ export default function PortalSettingsPage() {
     setSaving(true)
 
     try {
-      // Get encryption key from env (in production, this would be handled securely)
-      const { data: encryptionData } = await supabase.functions.invoke('get-encryption-key', {
-        body: {}
-      }).catch(() => ({ data: null }))
-
-      const encryptionKey = encryptionData?.key || ''
-
-      // Encrypt credentials if provided
+      // Use server-side encryption for credentials
+      // Credentials will be encrypted by the database function
       let encryptedUsername = config?.encrypted_username
       let encryptedPassword = config?.encrypted_password
 
-      if (username && encryptionKey) {
+      if (username) {
         const { data: encrypted } = await supabase.rpc('encrypt_credential', {
-          credential: username,
-          key: encryptionKey
+          credential: username
         })
         encryptedUsername = encrypted
       }
 
-      if (password && encryptionKey) {
+      if (password) {
         const { data: encrypted } = await supabase.rpc('encrypt_credential', {
-          credential: password,
-          key: encryptionKey
+          credential: password
         })
         encryptedPassword = encrypted
       }
 
-      const { error } = await supabase
-        .from('portal_config')
-        .update({
-          base_url: baseUrl,
-          api_endpoint: apiEndpoint,
-          encrypted_username: encryptedUsername,
-          encrypted_password: encryptedPassword,
-          api_key: apiKey || null,
-          sync_enabled: syncEnabled,
-          sync_interval_minutes: syncInterval,
-          auto_dispatch_enabled: autoDispatch,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', config?.id)
+      const configData = {
+        base_url: baseUrl,
+        api_endpoint: apiEndpoint,
+        encrypted_username: encryptedUsername,
+        encrypted_password: encryptedPassword,
+        api_key: apiKey || null,
+        sync_enabled: syncEnabled,
+        sync_interval_minutes: syncInterval,
+        auto_dispatch_enabled: autoDispatch,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error } = config?.id
+        ? await supabase
+            .from('portal_config')
+            .update(configData)
+            .eq('id', config.id)
+        : await supabase
+            .from('portal_config')
+            .insert(configData)
 
       if (error) {
         throw error
@@ -201,7 +197,6 @@ export default function PortalSettingsPage() {
       setPassword('')
       await fetchConfig()
     } catch (error: any) {
-      console.error('Error saving config:', error)
       toast({
         title: 'Error saving settings',
         description: error.message || 'Failed to save configuration.',
@@ -235,7 +230,6 @@ export default function PortalSettingsPage() {
       await fetchSyncLogs()
       await fetchConfig()
     } catch (error: any) {
-      console.error('Error during sync:', error)
       toast({
         title: 'Sync failed',
         description: error.message || 'Failed to sync with portal.',

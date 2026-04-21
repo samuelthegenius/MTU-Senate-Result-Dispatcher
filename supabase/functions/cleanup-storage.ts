@@ -3,10 +3,35 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // deno-lint-ignore no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Allowed origins for CORS - supports local dev and production
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS")
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean)
+  }
+  // Default origins if not configured
+  return [
+    "http://localhost:5173",
+    "https://mturesults.app",
+    "https://www.mturesults.app",
+  ]
+}
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const allowedOrigins = getAllowedOrigins()
+  const origin = req.headers.get("origin")
+  
+  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
+  const allowOrigin = !origin || allowedOrigins.includes(origin) 
+    ? (origin || allowedOrigins[0]) 
+    : allowedOrigins[0]
+  
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  }
 }
 
 interface CleanupRequest {
@@ -17,12 +42,48 @@ interface CleanupRequest {
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: getCorsHeaders(req) })
   }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+
+    // Get user JWT from Authorization header
+    const authHeader = req.headers.get("authorization")
+    const userJwt = authHeader?.replace("Bearer ", "")
+
+    if (!userJwt) {
+      return new Response(JSON.stringify({ error: "Missing authorization header" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
+    }
+
+    // Validate user JWT by creating a client with it and checking the user
+    const supabaseUserClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${userJwt}`,
+        },
+      },
+    })
+
+    // Verify the JWT is valid by getting the user
+    const { data: { user }, error: authError } = await supabaseUserClient.auth.getUser()
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
+    }
+
+    // Use service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const { studentId, pdfUrl, mode = 'single' }: CleanupRequest = await req.json()
@@ -119,17 +180,15 @@ serve(async (req: Request) => {
         errors: errors.length > 0 ? errors : undefined
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
     )
-  } catch (error: unknown) {
-    console.error("[cleanup-storage] Error:", error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
+  } catch {
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "Cleanup failed" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       }
     )
   }

@@ -1,10 +1,35 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Allowed origins for CORS - supports local dev and production
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS")
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean)
+  }
+  // Default origins if not configured
+  return [
+    "http://localhost:5173",
+    "https://mturesults.app",
+    "https://www.mturesults.app",
+  ]
+}
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const allowedOrigins = getAllowedOrigins()
+  const origin = req.headers.get("origin")
+  
+  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
+  const allowOrigin = !origin || allowedOrigins.includes(origin) 
+    ? (origin || allowedOrigins[0]) 
+    : allowedOrigins[0]
+  
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  }
 }
 
 interface TelegramUpdate {
@@ -86,31 +111,42 @@ async function setupBotCommands(botToken: string): Promise<void> {
   })
 
   if (!response.ok) {
-    const errorData = await response.json()
-    console.error("Failed to set bot commands:", errorData)
+    // Failed to set bot commands - continue silently
   }
 }
 
 // Initialize bot commands on startup
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")
 if (TELEGRAM_BOT_TOKEN) {
-  setupBotCommands(TELEGRAM_BOT_TOKEN).catch(console.error)
-} else {
-  console.warn("TELEGRAM_BOT_TOKEN not set, skipping bot command setup")
+  setupBotCommands(TELEGRAM_BOT_TOKEN).catch(() => {
+    // Bot command setup failed - continue silently
+  })
 }
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: getCorsHeaders(req) })
   }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN")!
+    const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET")
 
     if (!telegramBotToken) {
       throw new Error("TELEGRAM_BOT_TOKEN not configured")
+    }
+
+    // Validate webhook secret if configured (protects against fake webhook requests)
+    if (webhookSecret) {
+      const requestSecret = req.headers.get("X-Telegram-Bot-Api-Secret-Token")
+      if (requestSecret !== webhookSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        })
+      }
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey)
@@ -120,7 +156,7 @@ serve(async (req: Request) => {
 
     if (!message) {
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -157,7 +193,7 @@ You are set up to receive results for <b>${studentName}</b>.
 <b>/help</b> - Get help and information`
           )
           return new Response(JSON.stringify({ ok: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           })
         }
       }
@@ -188,7 +224,7 @@ You are set up to receive results for <b>${studentName}</b>.
             "Invalid or expired verification token. Please contact the school administration for assistance."
           )
           return new Response(JSON.stringify({ ok: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           })
         }
 
@@ -206,14 +242,13 @@ You are set up to receive results for <b>${studentName}</b>.
           .eq("id", parentContact.id)
 
         if (updateError) {
-          console.error("Failed to update parent contact:", updateError)
           await sendTelegramMessage(
             telegramBotToken,
             chatId,
             "An error occurred while linking your account. Please try again later."
           )
           return new Response(JSON.stringify({ ok: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           })
         }
 
@@ -262,7 +297,7 @@ You are set up to receive results for <b>${studentName}</b>.
       }
 
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -283,7 +318,7 @@ You are set up to receive results for <b>${studentName}</b>.
         "Just send /start again and verify your phone number."
       )
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -315,7 +350,7 @@ You are set up to receive results for <b>${studentName}</b>.
       }
 
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -365,7 +400,7 @@ You are set up to receive results for <b>${studentName}</b>.
           "We couldn't find an account associated with this phone number. Please ensure your phone number is registered with the school, or contact the administration for assistance."
         )
         return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         })
       }
 
@@ -383,14 +418,13 @@ You are set up to receive results for <b>${studentName}</b>.
         .eq("id", parentContact.id)
 
       if (updateError) {
-        console.error("Failed to update parent contact:", updateError)
         await sendTelegramMessage(
           telegramBotToken,
           chatId,
           "An error occurred while linking your account. Please try again later."
         )
         return new Response(JSON.stringify({ ok: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         })
       }
 
@@ -413,7 +447,7 @@ You are set up to receive results for <b>${studentName}</b>.
       )
 
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -426,7 +460,7 @@ You are set up to receive results for <b>${studentName}</b>.
         { remove_keyboard: true }
       )
       return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -438,14 +472,12 @@ You are set up to receive results for <b>${studentName}</b>.
     )
 
     return new Response(JSON.stringify({ ok: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
-  } catch (error) {
-    console.error("Telegram webhook error:", error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    return new Response(JSON.stringify({ error: errorMessage }), {
+  } catch {
+    return new Response(JSON.stringify({ error: "Webhook processing failed" }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
   }
 })
@@ -477,7 +509,6 @@ async function sendTelegramMessage(
 
   if (!response.ok) {
     const errorData = await response.json()
-    console.error("Failed to send Telegram message:", errorData)
     throw new Error(`Telegram API error: ${errorData.description}`)
   }
 }
@@ -504,7 +535,6 @@ async function sendTelegramMessageWithKeyboard(
 
   if (!response.ok) {
     const errorData = await response.json()
-    console.error("Failed to send Telegram message with keyboard:", errorData)
     throw new Error(`Telegram API error: ${errorData.description}`)
   }
 }

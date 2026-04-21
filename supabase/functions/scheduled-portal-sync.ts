@@ -4,10 +4,35 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // deno-lint-ignore no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Allowed origins for CORS - supports local dev and production
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS")
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean)
+  }
+  // Default origins if not configured
+  return [
+    "http://localhost:5173",
+    "https://mturesults.app",
+    "https://www.mturesults.app",
+  ]
+}
+
+const getCorsHeaders = (req: Request): Record<string, string> => {
+  const allowedOrigins = getAllowedOrigins()
+  const origin = req.headers.get("origin")
+  
+  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
+  const allowOrigin = !origin || allowedOrigins.includes(origin) 
+    ? (origin || allowedOrigins[0]) 
+    : allowedOrigins[0]
+  
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  }
 }
 
 // Cron-compatible scheduled sync function
@@ -17,7 +42,7 @@ const corsHeaders = {
 // 3. Manual invocation from UI
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: getCorsHeaders(req) })
   }
 
   try {
@@ -26,22 +51,19 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Verify this is a scheduled call or authorized manual trigger
-    const authHeader = req.headers.get("authorization")
     const cronSecret = req.headers.get("x-cron-secret")
     const expectedCronSecret = Deno.env.get("CRON_SECRET")
 
     // Allow if:
     // 1. Valid cron secret is provided (for external cron services)
-    // 2. Service role key is provided (for internal/supabase cron)
-    // 3. Request is from Supabase cron (can be identified by specific headers)
-    const isSupabaseCron = req.headers.get("user-agent")?.includes("supabase") ||
-                          (authHeader?.includes(supabaseServiceKey.slice(0, 10)) ?? false)
+    // 2. Request is from Supabase cron (identified by user-agent)
+    const isSupabaseCron = req.headers.get("user-agent")?.includes("supabase") ?? false
     const hasValidCronSecret = expectedCronSecret && cronSecret === expectedCronSecret
 
     if (!isSupabaseCron && !hasValidCronSecret) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -54,7 +76,7 @@ serve(async (req: Request) => {
     if (configError || !config) {
       return new Response(JSON.stringify({ error: "Portal configuration not found" }), {
         status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -64,7 +86,7 @@ serve(async (req: Request) => {
         message: "Portal sync is disabled, skipping",
         skipped: true 
       }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -81,7 +103,7 @@ serve(async (req: Request) => {
         skipped: true,
         nextSyncIn: minutesRemaining,
       }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       })
     }
 
@@ -89,14 +111,14 @@ serve(async (req: Request) => {
     if (config.last_sync_status === "running") {
       // Check if it's been running for more than 30 minutes (stuck)
       if (lastSync && (now.getTime() - lastSync.getTime()) > 30 * 60 * 1000) {
-        console.warn("[scheduled-portal-sync] Previous sync appears stuck, proceeding anyway")
+        // Previous sync appears stuck, proceeding anyway
       } else {
         return new Response(JSON.stringify({
           success: true,
           message: "A sync is already running",
           skipped: true,
         }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         })
       }
     }
@@ -123,8 +145,6 @@ serve(async (req: Request) => {
 
     // Send notification if new results were found and dispatched
     if (result.stats?.newResults > 0 || result.stats?.dispatched > 0) {
-      console.log(`[scheduled-portal-sync] Sync completed: ${result.stats.newResults} new results, ${result.stats.dispatched} dispatched`)
-
       // TODO: Send notification to admin (email, slack, etc.)
       // This could be implemented based on admin preferences
     }
@@ -134,16 +154,13 @@ serve(async (req: Request) => {
       message: "Scheduled sync completed",
       result,
     }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error("[scheduled-portal-sync] Error:", error)
-
+  } catch {
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "Scheduled sync failed" }),
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     )
   }
 })
