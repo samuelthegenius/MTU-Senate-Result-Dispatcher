@@ -557,7 +557,7 @@ serve(async (req: Request) => {
     const { data: config, error: configError } = await supabase
       .from("portal_config")
       .select("*")
-      .single()
+      .maybeSingle()
 
     if (configError || !config) {
       throw new Error("Portal configuration not found")
@@ -664,14 +664,21 @@ serve(async (req: Request) => {
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-      await supabase
+      const { data: configRow } = await supabase
         .from("portal_config")
-        .update({
-          last_sync_status: "error",
-          last_sync_message: detailedError, // Store detailed error server-side
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", (await supabase.from("portal_config").select("id").single()).data?.id)
+        .select("id")
+        .maybeSingle()
+
+      if (configRow?.id) {
+        await supabase
+          .from("portal_config")
+          .update({
+            last_sync_status: "error",
+            last_sync_message: detailedError,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", configRow.id)
+      }
     } catch {
       // Error handling failed - silent
     }

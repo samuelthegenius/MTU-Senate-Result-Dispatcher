@@ -71,7 +71,7 @@ serve(async (req: Request) => {
     const { data: config, error: configError } = await supabase
       .from("portal_config")
       .select("*")
-      .single()
+      .maybeSingle()
 
     if (configError || !config) {
       return new Response(JSON.stringify({ error: "Portal configuration not found" }), {

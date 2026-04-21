@@ -214,7 +214,7 @@ export default function DashboardPage() {
       const { data, error } = await supabase
         .from('portal_config')
         .select('sync_enabled, last_sync_at, last_sync_status, auto_dispatch_enabled')
-        .single()
+        .maybeSingle()
 
       if (error) {
         return
