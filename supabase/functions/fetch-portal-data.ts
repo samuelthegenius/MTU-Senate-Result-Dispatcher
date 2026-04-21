@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 // deno-lint-ignore no-import-prefix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // deno-lint-ignore no-import-prefix
@@ -27,6 +26,7 @@ interface PortalResult {
   pdf_url: string
   level: number
   semester: number
+  result_type?: 'regular' | 'supplementary' // Type of result from portal
   session: string
   cgpa?: number
   portal_result_id: string
@@ -431,18 +431,6 @@ async function performPortalSync(
         continue
       }
 
-      // Check if result already exists
-      const { data: existingResult } = await supabase
-        .from("results")
-        .select("id")
-        .eq("portal_result_id", result.portal_result_id)
-        .maybeSingle()
-
-      if (existingResult) {
-        // Result already exists, skip
-        continue
-      }
-
       // Download and store PDF
       const pdfUrl = await downloadAndStorePdf(supabase, result.pdf_url, result.matric_no, token, config)
 
@@ -451,19 +439,21 @@ async function performPortalSync(
         continue
       }
 
-      // Insert result as senate-approved (since it comes from portal)
+      // Upsert result as senate-approved (since it comes from portal)
+      // Uses composite conflict key (student_id, level, semester) to allow multiple results per student
       // deno-lint-ignore no-explicit-any
       const { data: newResult, error: insertError } = await (supabase.from as any)("results")
-        .insert({
+        .upsert({
           student_id: studentId,
           pdf_url: pdfUrl,
           level: result.level,
           semester: result.semester,
+          result_type: result.result_type || 'regular', // Default to regular if not specified
           is_senate_approved: true, // Portal results are already senate approved
           source: "portal",
           portal_result_id: result.portal_result_id,
           portal_fetched_at: new Date().toISOString(),
-        })
+        }, { onConflict: "student_id,level,semester,result_type" })
         .select("id")
         .single()
 

@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 // deno-lint-ignore no-import-prefix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // deno-lint-ignore no-import-prefix
@@ -18,6 +17,7 @@ interface Result {
   pdf_url: string
   level?: number
   semester?: number
+  result_type?: 'regular' | 'supplementary'
   is_senate_approved: boolean
   student: Student
 }
@@ -89,7 +89,7 @@ function getOrdinalSuffix(n: number): string {
 }
 
 // Helper function to build result details string
-function buildResultDetails(student: Student, level?: number, semester?: number): string {
+function buildResultDetails(student: Student, level?: number, semester?: number, resultType?: string): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: ${student.programme}`)
@@ -103,11 +103,14 @@ function buildResultDetails(student: Student, level?: number, semester?: number)
   if (semester) {
     parts.push(`${semester}${getOrdinalSuffix(semester)} Semester`)
   }
+  if (resultType === 'supplementary') {
+    parts.push('Supplementary/Resit')
+  }
   return parts.length > 0 ? ` (${parts.join(', ')})` : ''
 }
 
 // Helper function to build result details for HTML
-function buildResultDetailsHTML(student: Student, level?: number, semester?: number): string {
+function buildResultDetailsHTML(student: Student, level?: number, semester?: number, resultType?: string): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: <strong>${student.programme}</strong>`)
@@ -120,6 +123,9 @@ function buildResultDetailsHTML(student: Student, level?: number, semester?: num
   }
   if (semester) {
     parts.push(`<strong>${semester}${getOrdinalSuffix(semester)} Semester</strong>`)
+  }
+  if (resultType === 'supplementary') {
+    parts.push('<strong style="color: #f59e0b;">Supplementary/Resit</strong>')
   }
   return parts.length > 0 ? ` (${parts.join(', ')})` : ''
 }
@@ -185,6 +191,7 @@ serve(async (req: Request) => {
         pdf_url,
         level,
         semester,
+        result_type,
         is_senate_approved,
         student:students (id, matric_no, full_name, programme, level)
       `)
@@ -267,8 +274,8 @@ serve(async (req: Request) => {
           
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
-          const resultDetails = buildResultDetails(student, result.level, result.semester)
-          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester)
+          const resultDetails = buildResultDetails(student, result.level, result.semester, result.result_type)
+          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester, result.result_type)
 
           const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
@@ -336,12 +343,13 @@ serve(async (req: Request) => {
           // Create File object with explicit PDF MIME type
           const pdfFile = new File([pdfBuffer], fileName, { type: "application/pdf" })
 
-          // Build Telegram caption with programme, student level, result level, and semester
+          // Build Telegram caption with programme, student level, result level, semester, and type
           const telegramDetails: string[] = []
           if (student.programme) telegramDetails.push(`📚 Programme: ${student.programme}`)
           if (student.level) telegramDetails.push(`🎓 Currently in: ${student.level}L`)
           if (result.level) telegramDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) telegramDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+          if (result.result_type === 'supplementary') telegramDetails.push(`⚠️ <b>Supplementary/Resit</b>`)
 
           // Create multipart form data - standard Telegram sendDocument
           const formData = new FormData()
@@ -402,12 +410,13 @@ serve(async (req: Request) => {
           const pdfBuffer = await pdfResponse.arrayBuffer()
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
-          // Build WhatsApp caption with programme, student level, result level, and semester
+          // Build WhatsApp caption with programme, student level, result level, semester, and type
           const whatsappDetails: string[] = []
           if (student.programme) whatsappDetails.push(`📚 Programme: ${student.programme}`)
           if (student.level) whatsappDetails.push(`🎓 Currently in: ${student.level}L`)
           if (result.level) whatsappDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) whatsappDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+          if (result.result_type === 'supplementary') whatsappDetails.push(`⚠️ *Supplementary/Resit*`)
 
           // Upload PDF to Green API first, then send
           const caption = `📄 *Result for ${student.full_name}*\n🆔 Matric: ${student.matric_no}${whatsappDetails.length > 0 ? '\n' + whatsappDetails.join('\n') : ''}\n\nDownload the PDF here (link expires in 7 days): ${signedUrl}`
