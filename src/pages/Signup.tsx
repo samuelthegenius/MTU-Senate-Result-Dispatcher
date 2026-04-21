@@ -175,11 +175,11 @@ export default function SignupPage() {
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
-            Accept Invitation
+            Join Senate Result Dispatch
           </h1>
 
           <p className="text-white/80 text-lg mb-8 max-w-md">
-            Accept your invitation to become part of the MTU Result Notification System
+            Help upload, approve, and send student results to parents via Email, WhatsApp, and Telegram
           </p>
 
           <div className="mt-auto pt-12">
@@ -198,7 +198,7 @@ export default function SignupPage() {
             alt="Mountain Top University"
             className="h-24 w-auto object-contain mx-auto mb-4"
           />
-          <p className="text-sm text-slate-500">Staff Portal</p>
+          <p className="text-sm text-slate-500">Result Dispatch Portal</p>
         </div>
 
         <Card className="w-full max-w-md border-slate-200 shadow-lg lg:shadow-xl">
@@ -208,7 +208,7 @@ export default function SignupPage() {
                 <UserPlus className="h-4 w-4 text-mtu-green" />
               </div>
               <span className="text-xs font-semibold text-mtu-green uppercase tracking-wider">
-                Accept Invitation
+                Result Dispatch Portal
               </span>
             </div>
             <CardTitle className="text-2xl font-bold text-slate-900">
@@ -305,7 +305,7 @@ export default function SignupPage() {
 
         <div className="mt-8 text-center">
           <p className="text-xs text-slate-400">
-            Result Notification System © 2025 MTU Senate
+            MTU Senate Result Dispatch System © 2026
           </p>
           <p className="text-[10px] text-slate-300 mt-1">
             "Empowered to Excel"

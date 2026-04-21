@@ -69,11 +69,11 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-6">
-            Staff Portal
+            MTU Senate Result Dispatch
           </h1>
 
           <p className="text-white/80 text-lg mb-8 max-w-md">
-            Staff Portal for Result Notification and Senate Approval System
+            Upload, approve, and dispatch student result statements to parents via Email, WhatsApp, and Telegram
           </p>
 
           <div className="flex items-center gap-3 text-white/70">
@@ -98,7 +98,7 @@ export default function LoginPage() {
             alt="Mountain Top University"
             className="h-24 w-auto object-contain mx-auto mb-4"
           />
-          <p className="text-sm text-slate-500">Staff Portal</p>
+          <p className="text-sm text-slate-500">Result Dispatch Portal</p>
         </div>
 
         <Card className="w-full max-w-md border-slate-200 shadow-lg lg:shadow-xl">
@@ -108,7 +108,7 @@ export default function LoginPage() {
                 <Lock className="h-4 w-4 text-mtu-green" />
               </div>
               <span className="text-xs font-semibold text-mtu-green uppercase tracking-wider">
-                Staff Portal
+                Result Dispatch
               </span>
             </div>
             <CardTitle className="text-2xl font-bold text-slate-900">
@@ -189,7 +189,7 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-slate-400">
-            Result Notification System &copy; 2025 MTU Senate
+            MTU Senate Result Dispatch System &copy; 2026
           </p>
           <p className="text-[10px] text-slate-300 mt-1">
             "Empowered to Excel"

@@ -116,10 +116,10 @@ export function Sidebar() {
       {/* Footer */}
       <div className="px-6 py-4 border-t border-mtu-green-100 bg-slate-50">
         <p className="text-xs text-slate-400 text-center">
-          Result Notification System
+          MTU Senate Result Dispatch
         </p>
         <p className="text-[10px] text-slate-300 text-center mt-1">
-          © 2025 MTU Senate
+          © 2026 MTU Senate
         </p>
       </div>
     </>
@@ -136,7 +136,7 @@ export function Sidebar() {
               alt="MTU"
               className="h-10 w-auto object-contain"
             />
-            <span className="font-bold text-mtu-green-dark text-sm">Staff Portal</span>
+            <span className="font-bold text-mtu-green-dark text-sm">Senate Dispatch</span>
           </div>
           <Button
             variant="ghost"
