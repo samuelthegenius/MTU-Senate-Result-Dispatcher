@@ -32,7 +32,7 @@ interface StudentResult extends ResultWithDetails {
   matric_no: string
   level?: number
   semester?: number
-  course?: string
+  programme?: string
   source?: string
   auto_dispatched_at?: string
   student_level?: number
