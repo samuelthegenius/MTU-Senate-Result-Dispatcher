@@ -7,6 +7,7 @@ interface PortalConfig {
   id: string
   base_url: string
   api_endpoint: string
+  students_endpoint?: string
   encrypted_username?: string
   encrypted_password?: string
   api_key?: string
@@ -194,8 +195,9 @@ async function fetchStudentsFromPortal(
   level?: number,
   session?: string
 ): Promise<PortalStudent[]> {
-  // TODO: Customize this based on actual MTU portal API
-  const url = new URL(`${config.base_url}/api/students`)
+  // Use configurable students endpoint, fallback to default
+  const studentsEndpoint = config.students_endpoint || '/api/students'
+  const url = new URL(`${config.base_url}${studentsEndpoint}`)
   if (level) url.searchParams.append("level", level.toString())
   if (session) url.searchParams.append("session", session)
 

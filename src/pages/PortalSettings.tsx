@@ -29,6 +29,7 @@ export interface PortalConfig {
   id: string
   base_url: string
   api_endpoint: string
+  students_endpoint: string
   encrypted_username?: string
   encrypted_password?: string
   api_key?: string
@@ -66,6 +67,7 @@ export default function PortalSettingsPage() {
   // Form state
   const [baseUrl, setBaseUrl] = useState('https://studentportal.mtu.edu.ng')
   const [apiEndpoint, setApiEndpoint] = useState('/api/results')
+  const [studentsEndpoint, setStudentsEndpoint] = useState('/api/students')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -93,6 +95,7 @@ export default function PortalSettingsPage() {
         setConfig(data)
         setBaseUrl(data.base_url)
         setApiEndpoint(data.api_endpoint)
+        setStudentsEndpoint(data.students_endpoint || '/api/students')
         setApiKey(data.api_key || '')
         setSyncEnabled(data.sync_enabled)
         setSyncInterval(data.sync_interval_minutes)
@@ -165,6 +168,7 @@ export default function PortalSettingsPage() {
       const configData = {
         base_url: baseUrl,
         api_endpoint: apiEndpoint,
+        students_endpoint: studentsEndpoint,
         encrypted_username: encryptedUsername,
         encrypted_password: encryptedPassword,
         api_key: apiKey || null,
@@ -428,6 +432,20 @@ export default function PortalSettingsPage() {
               />
               <p className="text-xs text-slate-400">API endpoint for fetching results</p>
             </div>
+          </div>
+
+          {/* Students Endpoint */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Students API Endpoint</label>
+            <Input
+              type="text"
+              value={studentsEndpoint}
+              onChange={(e) => setStudentsEndpoint(e.target.value)}
+              disabled={!isAdmin}
+              placeholder="/api/students"
+              className="h-11"
+            />
+            <p className="text-xs text-slate-400">API endpoint for fetching student roster</p>
           </div>
 
           {/* Credentials */}
