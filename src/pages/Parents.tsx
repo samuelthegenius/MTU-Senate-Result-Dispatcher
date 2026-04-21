@@ -17,6 +17,7 @@ interface ParentContact {
   full_name: string
   email: string | null
   telegram_chat_id: string | null
+  phone: string | null
   whatsapp_no: string | null
   verification_token: string | null
 }
@@ -50,6 +51,7 @@ export default function ParentsPage() {
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [parentType, setParentType] = useState<'father' | 'mother'>('father')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [whatsappNo, setWhatsappNo] = useState('')
 
   const fetchData = useCallback(async () => {
@@ -57,7 +59,7 @@ export default function ParentsPage() {
     const [contactsRes, studentsRes] = await Promise.all([
       supabase
         .from('parent_contacts')
-        .select('id, student_id, parent_type, email, telegram_chat_id, whatsapp_no, verification_token, created_at')
+        .select('id, student_id, parent_type, email, phone, telegram_chat_id, whatsapp_no, verification_token, created_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('students')
@@ -82,6 +84,7 @@ export default function ParentsPage() {
           student_id: c.student_id,
           parent_type: c.parent_type || 'father',
           email: c.email,
+          phone: c.phone,
           telegram_chat_id: c.telegram_chat_id,
           whatsapp_no: c.whatsapp_no,
           verification_token: c.verification_token,
@@ -118,10 +121,10 @@ export default function ParentsPage() {
     if (!selectedStudentId) return
 
     // Validate at least one contact method is provided
-    if (!email && !whatsappNo) {
+    if (!email && !phone && !whatsappNo) {
       toast({
         title: 'Validation Error',
-        description: 'Please provide at least one contact method (email or WhatsApp). Telegram will be linked via bot.',
+        description: 'Please provide at least one contact method (email, phone, or WhatsApp).',
         variant: 'destructive',
       })
       return
@@ -134,6 +137,7 @@ export default function ParentsPage() {
         student_id: selectedStudentId,
         parent_type: parentType,
         email: email || null,
+        phone: phone || null,
         whatsapp_no: whatsappNo || null,
       }, { onConflict: 'student_id,parent_type' })
 
@@ -173,6 +177,7 @@ export default function ParentsPage() {
     setSelectedStudentId('')
     setParentType('father')
     setEmail('')
+    setPhone('')
     setWhatsappNo('')
     setEditingContact(null)
   }
@@ -182,6 +187,7 @@ export default function ParentsPage() {
     setSelectedStudentId(contact.student_id)
     setParentType(contact.parent_type)
     setEmail(contact.email || '')
+    setPhone(contact.phone || '')
     setWhatsappNo(contact.whatsapp_no || '')
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -596,6 +602,9 @@ export default function ParentsPage() {
                   <Mail className="h-4 w-4 text-mtu-purple" />
                   Email
                 </label>
+                <p className="text-xs text-slate-500 mb-1">
+                  Provide phone number below for Telegram verification. Telegram link can also be sent via email.
+                </p>
                 <Input
                   type="email"
                   placeholder="parent@example.com"
@@ -603,10 +612,22 @@ export default function ParentsPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
                 />
-                <p className="text-xs text-slate-500">
-                  Telegram will be linked via bot invitation link.
-                  If the student was deleted and re-added, parents must use the new link to reconnect Telegram.
-                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  Phone Number
+                </label>
+                <Input
+                  type="tel"
+                  placeholder="+2348012345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="h-11"
+                />
+                <p className="text-xs text-slate-500">Required for Telegram bot phone verification. Include country code.</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
@@ -681,6 +702,7 @@ export default function ParentsPage() {
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
                     <TableHead className="font-semibold text-slate-700">Parent Type</TableHead>
                     <TableHead className="font-semibold text-slate-700">Email</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Phone</TableHead>
                     <TableHead className="font-semibold text-slate-700">Telegram</TableHead>
                     <TableHead className="font-semibold text-slate-700">WhatsApp</TableHead>
                     <TableHead className="font-semibold text-slate-700">Telegram Link</TableHead>
@@ -707,6 +729,18 @@ export default function ParentsPage() {
                       </TableCell>
                       <TableCell>
                         {getChannelIcon(contact.email, 'email')}
+                      </TableCell>
+                      <TableCell>
+                        {contact.phone ? (
+                          <div className="flex items-center gap-2">
+                            <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span className="text-sm text-slate-600">{contact.phone}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {getChannelIcon(contact.telegram_chat_id, 'telegram')}
@@ -776,7 +810,7 @@ export default function ParentsPage() {
                   ))}
                   {contacts.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />
