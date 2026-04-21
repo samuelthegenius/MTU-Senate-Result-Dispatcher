@@ -164,11 +164,10 @@ The system can automatically fetch student results from the MTU student portal (
 
 2. Add to `.env`:
    ```
-   TELEGRAM_BOT_TOKEN=your_bot_token
    VITE_TELEGRAM_BOT_USERNAME=your_bot_username_without_@
    ```
 
-3. Deploy the webhook Edge Function:
+3. Deploy the webhook Edge Function and set the bot token as a secret:
    ```bash
    supabase functions deploy telegram-webhook
    supabase secrets set TELEGRAM_BOT_TOKEN=your_bot_token
