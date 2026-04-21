@@ -276,6 +276,7 @@ export default function DashboardPage() {
         pdf_url: r.pdf_url,
         level: r.level,
         semester: r.semester,
+        result_type: r.result_type,
         is_senate_approved: r.is_senate_approved,
         dispatch_status: r.dispatch_status,
         created_at: r.created_at,

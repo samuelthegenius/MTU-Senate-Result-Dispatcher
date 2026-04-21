@@ -15,6 +15,8 @@ interface StudentResult {
   full_name: string
   pdf_url: string | null
   is_senate_approved: boolean
+  level: number | null
+  semester: number | null
   created_at: string
 }
 
@@ -28,7 +30,7 @@ export default function ResultsPage() {
     const [{ data: resultsData, error: resultsError }, { data: studentsData, error: _studentsError }] = await Promise.all([
       supabase
         .from('results')
-        .select('id, student_id, pdf_url, is_senate_approved, created_at')
+        .select('id, student_id, pdf_url, is_senate_approved, level, semester, created_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('students')
@@ -55,6 +57,8 @@ export default function ResultsPage() {
         student_id: r.student_id,
         pdf_url: r.pdf_url,
         is_senate_approved: r.is_senate_approved,
+        level: r.level,
+        semester: r.semester,
         created_at: r.created_at,
         matric_no: student?.matric_no ?? 'N/A',
         full_name: student?.full_name ?? 'Unknown Student',
@@ -223,6 +227,7 @@ export default function ResultsPage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Level/Semester</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate Status</TableHead>
                     <TableHead className="font-semibold text-slate-700">Upload Date</TableHead>
                     <TableHead className="font-semibold text-slate-700">Actions</TableHead>
@@ -236,6 +241,12 @@ export default function ResultsPage() {
                       </TableCell>
                       <TableCell className="font-medium text-slate-900">
                         {result.full_name}
+                      </TableCell>
+                      <TableCell className="text-slate-600 text-sm">
+                        {result.level ? `${result.level}L` : '-'}
+                        {result.level && result.semester ? ' / ' : ''}
+                        {result.semester ? `${result.semester}st Sem` : '-'}
+                        {!result.level && !result.semester && 'N/A'}
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -287,7 +298,7 @@ export default function ResultsPage() {
                   ))}
                   {results.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12">
+                      <TableCell colSpan={6} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />

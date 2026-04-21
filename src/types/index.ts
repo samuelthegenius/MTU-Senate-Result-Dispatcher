@@ -29,6 +29,7 @@ export interface Result {
   pdf_url: string
   level?: number // e.g., 100, 200, 300, 400, 500
   semester?: number // e.g., 1 or 2
+  result_type?: 'regular' | 'supplementary' // Type of result (regular or supplementary/resit)
   is_senate_approved: boolean
   dispatch_status: DispatchStatus | null
   created_at: string
