@@ -24,6 +24,10 @@ interface NavItem {
   adminOnly?: boolean
 }
 
+interface SidebarProps {
+  desktopOpen?: boolean
+}
+
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
   { label: 'Results', icon: FileText, href: '/results' },
@@ -33,7 +37,7 @@ const navItems: NavItem[] = [
   { label: 'Staff Management', icon: Users, href: '/admin', adminOnly: true },
 ]
 
-export function Sidebar() {
+export function Sidebar({ desktopOpen = true }: SidebarProps) {
   const { user, signOut } = useAuth()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -130,6 +134,14 @@ export function Sidebar() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-mtu-green-100 px-4 py-2">
         <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="text-slate-600 -ml-2"
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
           <div className="flex items-center gap-2">
             <img
               src="/mtulogo.jpg"
@@ -138,14 +150,7 @@ export function Sidebar() {
             />
             <span className="font-bold text-mtu-green-dark text-sm">Senate Dispatch</span>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="text-slate-600"
-          >
-            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
+          <div className="w-10" />
         </div>
       </div>
 
@@ -167,7 +172,11 @@ export function Sidebar() {
       </aside>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 h-full w-72 bg-white shadow-lg flex-col z-40">
+      <aside className={`
+        hidden lg:flex fixed top-0 h-full w-72 bg-white shadow-lg flex-col z-40
+        transition-all duration-300 ease-in-out
+        ${desktopOpen ? 'left-0' : '-left-72'}
+      `}>
         {navContent}
       </aside>
     </>

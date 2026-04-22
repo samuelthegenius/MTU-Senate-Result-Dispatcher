@@ -30,11 +30,12 @@
      - `add_results_level_semester.sql` - adds level/semester columns
      - `add_result_type.sql` - adds result_type column to results table
      - `add_student_course_level.sql` - adds course/level to students
+     - `add_students_endpoint_config.sql` - adds students endpoint configuration
      - `rename_course_to_programme.sql` - renames course column
      - `add_cron_job.sql` - sets up pg_cron scheduled sync (optional)
      - `fix_duplicate_portal_config.sql` - enforces single row constraint on portal_config
      - `fix_results_unique_constraint.sql` - fixes unique constraint on results table
-    - `20250422080000_add_session_cgpa_to_results.sql` - adds session and cgpa columns to results table
+   - `20250422080000_add_session_cgpa_to_results.sql` - adds session and cgpa columns to results table
    - Configure storage bucket `result_pdfs`
    - Deploy all Edge Functions:
      ```bash
