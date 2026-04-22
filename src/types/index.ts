@@ -29,7 +29,9 @@ export interface Result {
   pdf_url: string
   level?: number // e.g., 100, 200, 300, 400, 500
   semester?: number // e.g., 1 or 2
+  session?: string // e.g., "2023/2024", "2024/2025"
   result_type?: 'regular' | 'supplementary' // Type of result (regular or supplementary/resit)
+  cgpa?: number // e.g., 4.50, 3.75
   is_senate_approved: boolean
   dispatch_status: DispatchStatus | null
   created_at: string

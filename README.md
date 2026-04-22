@@ -34,6 +34,7 @@
      - `add_cron_job.sql` - sets up pg_cron scheduled sync (optional)
      - `fix_duplicate_portal_config.sql` - enforces single row constraint on portal_config
      - `fix_results_unique_constraint.sql` - fixes unique constraint on results table
+    - `20250422080000_add_session_cgpa_to_results.sql` - adds session and cgpa columns to results table
    - Configure storage bucket `result_pdfs`
    - Deploy all Edge Functions:
      ```bash
@@ -89,7 +90,7 @@
 ## Features
 
 - Auth guard restricts login to @mtu.edu.ng emails
-- Drag-and-drop PDF upload with filename parsing (format: 19010301081_S2.pdf)
+- Drag-and-drop PDF upload with filename parsing (formats: `19010301081_S2.pdf`, `19010301081_400_S2.pdf`, `19010301081_SUP.pdf`, `19010301081_400_SUP.pdf`)
 - Bulk senate approval with dispatch trigger
 - Delivery tracking icons for Email and Telegram
 - **Portal Integration** - Automatically fetch results from MTU student portal

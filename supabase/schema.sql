@@ -30,12 +30,14 @@ CREATE TABLE IF NOT EXISTS results (
   pdf_url TEXT,
   level INTEGER, -- e.g., 100, 200, 300, 400, 500
   semester INTEGER, -- e.g., 1 or 2
+  session VARCHAR(20), -- e.g., "2023/2024", "2024/2025"
   result_type TEXT DEFAULT 'regular' CHECK (result_type IN ('regular', 'supplementary')), -- regular or supplementary/resit
+  cgpa NUMERIC(3,2), -- e.g., 4.50, 3.75
   is_senate_approved BOOLEAN DEFAULT FALSE,
   dispatch_status JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(student_id, level, semester, result_type)
+  UNIQUE(student_id, level, semester, session, result_type)
 );
 
 -- Staff table for user profiles and roles
@@ -192,6 +194,8 @@ CREATE INDEX IF NOT EXISTS idx_students_matric ON students(matric_no);
 CREATE INDEX IF NOT EXISTS idx_results_student ON results(student_id);
 CREATE INDEX IF NOT EXISTS idx_results_approved ON results(is_senate_approved);
 CREATE INDEX IF NOT EXISTS idx_results_type ON results(result_type);
+CREATE INDEX IF NOT EXISTS idx_results_session ON results(session);
+CREATE INDEX IF NOT EXISTS idx_results_level_semester_session ON results(level, semester, session);
 
 -- Create trigger function to invoke dispatch when senate approval happens
 CREATE OR REPLACE FUNCTION trigger_dispatch_on_approval()

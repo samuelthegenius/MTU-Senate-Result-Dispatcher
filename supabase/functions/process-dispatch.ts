@@ -17,7 +17,9 @@ interface Result {
   pdf_url: string
   level?: number
   semester?: number
+  session?: string
   result_type?: 'regular' | 'supplementary'
+  cgpa?: number
   is_senate_approved: boolean
   student: Student
 }
@@ -89,7 +91,7 @@ function getOrdinalSuffix(n: number): string {
 }
 
 // Helper function to build result details string
-function buildResultDetails(student: Student, level?: number, semester?: number, resultType?: string): string {
+function buildResultDetails(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: ${student.programme}`)
@@ -103,6 +105,12 @@ function buildResultDetails(student: Student, level?: number, semester?: number,
   if (semester) {
     parts.push(`${semester}${getOrdinalSuffix(semester)} Semester`)
   }
+  if (session) {
+    parts.push(`Session: ${session}`)
+  }
+  if (cgpa !== undefined && cgpa !== null) {
+    parts.push(`CGPA: ${cgpa.toFixed(2)}`)
+  }
   if (resultType === 'supplementary') {
     parts.push('Supplementary/Resit')
   }
@@ -110,7 +118,7 @@ function buildResultDetails(student: Student, level?: number, semester?: number,
 }
 
 // Helper function to build result details for HTML
-function buildResultDetailsHTML(student: Student, level?: number, semester?: number, resultType?: string): string {
+function buildResultDetailsHTML(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: <strong>${student.programme}</strong>`)
@@ -123,6 +131,12 @@ function buildResultDetailsHTML(student: Student, level?: number, semester?: num
   }
   if (semester) {
     parts.push(`<strong>${semester}${getOrdinalSuffix(semester)} Semester</strong>`)
+  }
+  if (session) {
+    parts.push(`Session: <strong>${session}</strong>`)
+  }
+  if (cgpa !== undefined && cgpa !== null) {
+    parts.push(`CGPA: <strong>${cgpa.toFixed(2)}</strong>`)
   }
   if (resultType === 'supplementary') {
     parts.push('<strong style="color: #f59e0b;">Supplementary/Resit</strong>')
@@ -191,7 +205,9 @@ serve(async (req: Request) => {
         pdf_url,
         level,
         semester,
+        session,
         result_type,
+        cgpa,
         is_senate_approved,
         student:students (id, matric_no, full_name, programme, level)
       `)
@@ -274,8 +290,8 @@ serve(async (req: Request) => {
           
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
-          const resultDetails = buildResultDetails(student, result.level, result.semester, result.result_type)
-          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester, result.result_type)
+          const resultDetails = buildResultDetails(student, result.level, result.semester, result.result_type, result.session, result.cgpa)
+          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester, result.result_type, result.session, result.cgpa)
 
           const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
@@ -343,12 +359,14 @@ serve(async (req: Request) => {
           // Create File object with explicit PDF MIME type
           const pdfFile = new File([pdfBuffer], fileName, { type: "application/pdf" })
 
-          // Build Telegram caption with programme, student level, result level, semester, and type
+          // Build Telegram caption with programme, student level, result level, semester, session, cgpa, and type
           const telegramDetails: string[] = []
           if (student.programme) telegramDetails.push(`📚 Programme: ${student.programme}`)
           if (student.level) telegramDetails.push(`🎓 Currently in: ${student.level}L`)
           if (result.level) telegramDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) telegramDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+          if (result.session) telegramDetails.push(`📆 Session: ${result.session}`)
+          if (result.cgpa !== undefined && result.cgpa !== null) telegramDetails.push(`⭐ CGPA: <b>${result.cgpa.toFixed(2)}</b>`)
           if (result.result_type === 'supplementary') telegramDetails.push(`⚠️ <b>Supplementary/Resit</b>`)
 
           // Create multipart form data - standard Telegram sendDocument
@@ -410,12 +428,14 @@ serve(async (req: Request) => {
           const pdfBuffer = await pdfResponse.arrayBuffer()
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
-          // Build WhatsApp caption with programme, student level, result level, semester, and type
+          // Build WhatsApp caption with programme, student level, result level, semester, session, cgpa, and type
           const whatsappDetails: string[] = []
           if (student.programme) whatsappDetails.push(`📚 Programme: ${student.programme}`)
           if (student.level) whatsappDetails.push(`🎓 Currently in: ${student.level}L`)
           if (result.level) whatsappDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) whatsappDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
+          if (result.session) whatsappDetails.push(`📆 Session: ${result.session}`)
+          if (result.cgpa !== undefined && result.cgpa !== null) whatsappDetails.push(`⭐ CGPA: *${result.cgpa.toFixed(2)}*`)
           if (result.result_type === 'supplementary') whatsappDetails.push(`⚠️ *Supplementary/Resit*`)
 
           // Upload PDF to Green API first, then send

@@ -442,7 +442,7 @@ async function performPortalSync(
       }
 
       // Upsert result as senate-approved (since it comes from portal)
-      // Uses composite conflict key (student_id, level, semester) to allow multiple results per student
+      // Uses composite conflict key (student_id, level, semester, session, result_type) to allow multiple results per student
       // deno-lint-ignore no-explicit-any
       const { data: newResult, error: insertError } = await (supabase.from as any)("results")
         .upsert({
@@ -450,12 +450,14 @@ async function performPortalSync(
           pdf_url: pdfUrl,
           level: result.level,
           semester: result.semester,
+          session: result.session,
           result_type: result.result_type || 'regular', // Default to regular if not specified
+          cgpa: result.cgpa,
           is_senate_approved: true, // Portal results are already senate approved
           source: "portal",
           portal_result_id: result.portal_result_id,
           portal_fetched_at: new Date().toISOString(),
-        }, { onConflict: "student_id,level,semester,result_type" })
+        }, { onConflict: "student_id,level,semester,session,result_type" })
         .select("id")
         .single()
 
