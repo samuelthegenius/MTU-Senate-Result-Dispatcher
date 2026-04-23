@@ -328,12 +328,12 @@ export default function DashboardPage() {
     // Check all parent types
     for (const parentType of ['father', 'mother', 'parent']) {
       const parentStatus = status[parentType]
-      if (parentStatus && (parentStatus.email?.success || parentStatus.telegram?.success)) {
+      if (parentStatus && (parentStatus.email?.success || parentStatus.telegram?.success || parentStatus.whatsapp?.success)) {
         return true
       }
     }
     // Also check legacy format (direct email/telegram keys)
-    return status.email?.success || status.telegram?.success
+    return status.email?.success || status.telegram?.success || status.whatsapp?.success
   }
 
   const isFailed = (status: any) => {
@@ -345,14 +345,14 @@ export default function DashboardPage() {
       const parentStatus = status[parentType]
       if (parentStatus) {
         hasAny = true
-        const hasSuccess = parentStatus.email?.success || parentStatus.telegram?.success
+        const hasSuccess = parentStatus.email?.success || parentStatus.telegram?.success || parentStatus.whatsapp?.success
         if (hasSuccess) allFailed = false
       }
     }
     // Also check legacy format
-    if (status.email || status.telegram) {
+    if (status.email || status.telegram || status.whatsapp) {
       hasAny = true
-      if (status.email?.success || status.telegram?.success) allFailed = false
+      if (status.email?.success || status.telegram?.success || status.whatsapp?.success) allFailed = false
     }
     return hasAny && allFailed
   }
