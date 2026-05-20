@@ -6,10 +6,11 @@ import { useAuth } from '@/hooks/useAuth'
 
 interface AuthGuardProps {
   children: ReactNode
+  requireAdmin?: boolean
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
-  const { user, loading } = useAuth()
+export function AuthGuard({ children, requireAdmin = false }: AuthGuardProps) {
+  const { user, isActive, loading } = useAuth()
 
   if (loading) {
     return (
@@ -19,8 +20,19 @@ export function AuthGuard({ children }: AuthGuardProps) {
     )
   }
 
+  // Not logged in at all
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Logged in but account is deactivated
+  if (!isActive) {
+    return <Navigate to="/login" replace />
+  }
+
+  // Admin-only route but user is not admin
+  if (requireAdmin && user.user_metadata?.role !== 'admin') {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>

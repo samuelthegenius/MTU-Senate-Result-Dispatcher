@@ -86,50 +86,25 @@ CREATE TRIGGER portal_results_auto_dispatch_trigger
   FOR EACH ROW
   EXECUTE FUNCTION trigger_auto_dispatch_portal_results();
 
--- Function to encrypt credentials (basic XOR for demo - use proper encryption in production)
-CREATE OR REPLACE FUNCTION encrypt_credential(credential TEXT, key TEXT)
-RETURNS TEXT AS $$
-DECLARE
-  result TEXT := '';
-  i INTEGER;
-BEGIN
-  IF credential IS NULL THEN
-    RETURN NULL;
-  END IF;
-  
-  FOR i IN 1..length(credential) LOOP
-    result := result || chr(ascii(substring(credential from i for 1)) # ascii(substring(key from (i % length(key)) + 1 for 1)));
-  END LOOP;
-  
-  RETURN encode(result::bytea, 'base64');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+-- encrypt_credential: replaced weak XOR implementation with a server-only stub.
+-- Actual AES-256-GCM encryption is performed in the fetch-portal-data edge function
+-- using the Web Crypto API and the PORTAL_ENCRYPTION_KEY environment variable.
+-- This SQL function exists only for compatibility; real encryption must happen
+-- via the edge function, NOT via this RPC.
+--
+-- Security: revoke execute from 'authenticated' to prevent any logged-in user from
+-- calling this directly. Only service_role (used by edge functions) may call it.
+--
+-- NOTE: If you have existing rows with XOR-encrypted credentials, they need to be
+-- re-encrypted using the edge function before they can be decrypted correctly.
 
--- Function to decrypt credentials
-CREATE OR REPLACE FUNCTION decrypt_credential(encrypted TEXT, key TEXT)
-RETURNS TEXT AS $$
-DECLARE
-  result TEXT := '';
-  decoded BYTEA;
-  i INTEGER;
-  cred TEXT;
-BEGIN
-  IF encrypted IS NULL THEN
-    RETURN NULL;
-  END IF;
-  
-  decoded := decode(encrypted, 'base64');
-  cred := convert_from(decoded, 'UTF8');
-  
-  FOR i IN 1..length(cred) LOOP
-    result := result || chr(ascii(substring(cred from i for 1)) # ascii(substring(key from (i % length(key)) + 1 for 1)));
-  END LOOP;
-  
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+-- Drop the old insecure implementations
+DROP FUNCTION IF EXISTS encrypt_credential(TEXT, TEXT);
+DROP FUNCTION IF EXISTS decrypt_credential(TEXT, TEXT);
 
--- Grant execute permissions
-GRANT EXECUTE ON FUNCTION invoke_dispatch(UUID) TO authenticated;
-GRANT EXECUTE ON FUNCTION encrypt_credential(TEXT, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION decrypt_credential(TEXT, TEXT) TO authenticated;
+-- Revoke previously granted public execute access
+REVOKE EXECUTE ON FUNCTION invoke_dispatch(UUID) FROM authenticated;
+
+-- Restrict invoke_dispatch to service_role only
+GRANT EXECUTE ON FUNCTION invoke_dispatch(UUID) TO service_role;
+

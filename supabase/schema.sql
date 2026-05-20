@@ -144,16 +144,21 @@ CREATE POLICY "Admins can delete staff" ON staff
   );
 
 -- Invites policies
+-- Only allow reading invites to validate a specific token+email combo (for signup)
+-- This prevents any authenticated user from enumerating all invite tokens
 DROP POLICY IF EXISTS "Anyone can use valid invite" ON invites;
 CREATE POLICY "Anyone can use valid invite" ON invites
-  FOR SELECT TO authenticated USING (
+  FOR SELECT TO anon, authenticated USING (
     used_at IS NULL AND expires_at > NOW()
   );
 
--- Invites policies - allow all authenticated users to see invites (admins can filter in UI)
+-- Admins can see all invites for management (replacing the broad "Authenticated can read invites")
 DROP POLICY IF EXISTS "Authenticated can read invites" ON invites;
-CREATE POLICY "Authenticated can read invites" ON invites
-  FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Admins can read invites" ON invites;
+CREATE POLICY "Admins can read invites" ON invites
+  FOR SELECT TO authenticated USING (
+    EXISTS (SELECT 1 FROM staff WHERE user_id = auth.uid() AND role = 'admin' AND is_active = true)
+  );
 
 DROP POLICY IF EXISTS "Admins can insert invites" ON invites;
 CREATE POLICY "Admins can insert invites" ON invites

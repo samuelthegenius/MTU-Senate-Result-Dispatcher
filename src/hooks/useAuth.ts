@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  isActive: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isActive, setIsActive] = useState(false)
   const lastFetchedUserId = React.useRef<string | null>(null)
   const hasInitialized = React.useRef(false)
   const pendingRoleFetch = React.useRef<Promise<{ role: string, is_active: boolean, full_name: string | null } | null> | null>(null)
@@ -135,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const staffData = await fetchStaffData(sessionUser.id)
           if (staffData) {
             lastFetchedUserId.current = sessionUser.id
+            setIsActive(staffData.is_active)
             setUser({
               ...sessionUser,
               user_metadata: {
@@ -145,9 +148,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } as User)
           } else {
+            setIsActive(false)
             setUser(sessionUser)
           }
         } else {
+          setIsActive(false)
           setUser(sessionUser)
         }
 
@@ -172,12 +177,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!sessionUser) {
           // User logged out - reset the flag
           lastFetchedUserId.current = null
+          setIsActive(false)
           setUser(null)
         } else if (lastFetchedUserId.current !== sessionUser.id) {
           // New user logged in - fetch their staff data
           const staffData = await fetchStaffData(sessionUser.id)
           if (staffData) {
             lastFetchedUserId.current = sessionUser.id
+            setIsActive(staffData.is_active)
             setUser({
               ...sessionUser,
               user_metadata: {
@@ -188,6 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } as User)
           } else {
+            setIsActive(false)
             setUser(sessionUser)
           }
         }
@@ -210,7 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const trimmedEmail = email.trim().toLowerCase()
-    const trimmedPassword = password.trim()
+    // Do NOT trim the password — spaces are valid password characters
+    const trimmedPassword = password
 
     const emailDomain = trimmedEmail.split('@')[1]
     if (emailDomain !== 'mtu.edu.ng') {
@@ -260,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    /* @__PURE__ */ React.createElement(AuthContext.Provider, { value: { user, session, loading, signIn, signOut } }, children)
+    /* @__PURE__ */ React.createElement(AuthContext.Provider, { value: { user, session, loading, isActive, signIn, signOut } }, children)
   )
 }
 

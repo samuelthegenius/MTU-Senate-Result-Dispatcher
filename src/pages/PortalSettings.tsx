@@ -146,31 +146,14 @@ export default function PortalSettingsPage() {
     setSaving(true)
 
     try {
-      // Use server-side encryption for credentials
-      // Credentials will be encrypted by the database function
-      let encryptedUsername = config?.encrypted_username
-      let encryptedPassword = config?.encrypted_password
-
-      if (username) {
-        const { data: encrypted } = await supabase.rpc('encrypt_credential', {
-          credential: username
-        })
-        encryptedUsername = encrypted
-      }
-
-      if (password) {
-        const { data: encrypted } = await supabase.rpc('encrypt_credential', {
-          credential: password
-        })
-        encryptedPassword = encrypted
-      }
-
-      const configData = {
+      // Credentials are encrypted server-side in the edge function (AES-256-GCM).
+      // We pass them as plaintext here over HTTPS; the edge function encrypts them
+      // using PORTAL_ENCRYPTION_KEY before writing to the database.
+      // Only send credentials if the user has entered new ones.
+      const configData: Record<string, unknown> = {
         base_url: baseUrl,
         api_endpoint: apiEndpoint,
         students_endpoint: studentsEndpoint,
-        encrypted_username: encryptedUsername,
-        encrypted_password: encryptedPassword,
         api_key: apiKey || null,
         sync_enabled: syncEnabled,
         sync_interval_minutes: syncInterval,
@@ -178,17 +161,21 @@ export default function PortalSettingsPage() {
         updated_at: new Date().toISOString(),
       }
 
-      const { error } = config?.id
-        ? await supabase
-            .from('portal_config')
-            .update(configData)
-            .eq('id', config.id)
-        : await supabase
-            .from('portal_config')
-            .insert(configData)
+      // Only include credentials in the payload if the user typed new ones
+      if (username) configData.plaintext_username = username
+      if (password) configData.plaintext_password = password
+
+      // Delegate the save (and credential encryption) to the edge function
+      const { data, error } = await supabase.functions.invoke('save-portal-config', {
+        body: configData,
+      })
 
       if (error) {
-        throw error
+        throw new Error(error.message)
+      }
+
+      if (data?.error) {
+        throw new Error(data.error)
       }
 
       toast({
@@ -197,7 +184,8 @@ export default function PortalSettingsPage() {
         variant: 'success',
       })
 
-      // Clear password field after save
+      // Clear credential fields after save
+      setUsername('')
       setPassword('')
       await fetchConfig()
     } catch (error: any) {

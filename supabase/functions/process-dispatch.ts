@@ -55,14 +55,11 @@ const getAllowedOrigins = (): string[] => {
 const getCorsHeaders = (req: Request): Record<string, string> => {
   const allowedOrigins = getAllowedOrigins()
   const origin = req.headers.get("origin")
-  
-  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
-  const allowOrigin = !origin || allowedOrigins.includes(origin) 
-    ? (origin || allowedOrigins[0]) 
-    : allowedOrigins[0]
-  
+  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : null
+
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    // Only echo back the Origin if it is in the allowed list.
+    ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",

@@ -20,14 +20,10 @@ const getAllowedOrigins = (): string[] => {
 const getCorsHeaders = (req: Request): Record<string, string> => {
   const allowedOrigins = getAllowedOrigins()
   const origin = req.headers.get("origin")
-  
-  // Allow requests with no origin (mobile apps, curl, etc.) or from allowed origins
-  const allowOrigin = !origin || allowedOrigins.includes(origin) 
-    ? (origin || allowedOrigins[0]) 
-    : allowedOrigins[0]
-  
+  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : null
+
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    ...(allowOrigin ? { "Access-Control-Allow-Origin": allowOrigin } : {}),
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
@@ -49,17 +45,20 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Verify this is a scheduled call or authorized manual trigger
+    // Verify this is an authorized call via cron secret
     const cronSecret = req.headers.get("x-cron-secret")
     const expectedCronSecret = Deno.env.get("CRON_SECRET")
 
-    // Allow if:
-    // 1. Valid cron secret is provided (for external cron services)
-    // 2. Request is from Supabase cron (identified by user-agent)
-    const isSupabaseCron = req.headers.get("user-agent")?.includes("supabase") ?? false
-    const hasValidCronSecret = expectedCronSecret && cronSecret === expectedCronSecret
+    // CRON_SECRET must be set — if it's not configured, reject all requests
+    // (prevents the endpoint from being an open trigger in environments without the secret)
+    if (!expectedCronSecret) {
+      return new Response(JSON.stringify({ error: "CRON_SECRET not configured" }), {
+        status: 503,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
+    }
 
-    if (!isSupabaseCron && !hasValidCronSecret) {
+    if (cronSecret !== expectedCronSecret) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

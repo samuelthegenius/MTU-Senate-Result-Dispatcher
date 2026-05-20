@@ -26,9 +26,9 @@ function PageLoader() {
 }
 
 // Wrapper component that applies Layout to authenticated routes
-function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+function AuthenticatedLayout({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin={requireAdmin}>
       <Layout>{children}</Layout>
     </AuthGuard>
   )
@@ -53,7 +53,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <AuthenticatedLayout>
+              <AuthenticatedLayout requireAdmin>
                 <AdminPage />
               </AuthenticatedLayout>
             }
@@ -85,7 +85,7 @@ function App() {
           <Route
             path="/portal"
             element={
-              <AuthenticatedLayout>
+              <AuthenticatedLayout requireAdmin>
                 <PortalSettingsPage />
               </AuthenticatedLayout>
             }
