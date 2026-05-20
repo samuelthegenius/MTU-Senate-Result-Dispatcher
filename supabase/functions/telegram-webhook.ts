@@ -69,7 +69,6 @@ interface ParentContact {
   email: string | null
   phone: string | null
   whatsapp_no: string | null
-  telegram_id: string | null
   telegram_chat_id: string | null
   verification_token: string | null
   student: Student[] | null
@@ -211,7 +210,6 @@ You are set up to receive results for <b>${studentName}</b>.
             email,
             phone,
             whatsapp_no,
-            telegram_id,
             telegram_chat_id,
             verification_token,
             student:student_id (full_name, matric_no)
@@ -358,41 +356,44 @@ You are set up to receive results for <b>${studentName}</b>.
 
     // Handle contact sharing
     if (message.contact) {
-      const phoneNumber = message.contact.phone_number.replace(/\D/g, "") // Remove non-digits
+      const phoneRaw = message.contact.phone_number
+      const phoneDigits = phoneRaw.replace(/\D/g, "")
 
-      // Look up parent by phone number (try both with and without country code)
-      const phoneVariations = [
-        phoneNumber,
-        phoneNumber.startsWith("0") ? phoneNumber.substring(1) : "0" + phoneNumber,
-        phoneNumber.startsWith("234") ? "0" + phoneNumber.substring(3) : phoneNumber,
-        phoneNumber.startsWith("+234") ? "0" + phoneNumber.substring(4) : phoneNumber,
-        phoneNumber.startsWith("0") ? "234" + phoneNumber.substring(1) : "234" + phoneNumber,
-      ]
+      const intlDigits = phoneDigits.startsWith("0")
+        ? "234" + phoneDigits.substring(1)
+        : phoneDigits
+
+      const localDigits = phoneDigits.startsWith("234")
+        ? "0" + phoneDigits.substring(3)
+        : phoneDigits
+
+      const digitPatterns = [...new Set([intlDigits, localDigits])]
+
+      // DEBUG: log what we received and what we're searching for
+      console.log("[DEBUG] Contact shared. phoneRaw:", phoneRaw)
+      console.log("[DEBUG] phoneDigits:", phoneDigits)
+      console.log("[DEBUG] digitPatterns:", JSON.stringify(digitPatterns))
+
+      const selectFields = "id, student_id, parent_type, email, phone, whatsapp_no, telegram_chat_id, verification_token, student:student_id(full_name, matric_no)"
 
       let parentContact: ParentContact | null = null
 
-      for (const phone of phoneVariations) {
-        const { data, error } = await supabase
-          .from("parent_contacts")
-          .select(`
-            id,
-            student_id,
-            parent_type,
-            email,
-            phone,
-            whatsapp_no,
-            telegram_id,
-            telegram_chat_id,
-            verification_token,
-            student:student_id (full_name, matric_no)
-          `)
-          .or(`phone.eq.${phone},whatsapp_no.eq.${phone}`)
-          .single()
+      for (const digits of digitPatterns) {
+        for (const column of ["phone", "whatsapp_no"]) {
+          const { data, error } = await supabase
+            .from("parent_contacts")
+            .select(selectFields)
+            .ilike(column, `%${digits}%`)
+            .limit(1)
 
-        if (!error && data) {
-          parentContact = data as ParentContact
-          break
+          console.log(`[DEBUG] ilike ${column} %${digits}%:`, JSON.stringify(data), "error:", JSON.stringify(error))
+
+          if (data && data.length > 0) {
+            parentContact = data[0] as ParentContact
+            break
+          }
         }
+        if (parentContact) break
       }
 
       if (!parentContact) {
