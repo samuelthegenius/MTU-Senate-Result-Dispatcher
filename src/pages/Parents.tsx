@@ -603,7 +603,7 @@ export default function ParentsPage() {
                   Email
                 </label>
                 <p className="text-xs text-slate-500 mb-1">
-                  Provide phone number below for Telegram verification. Telegram link can also be sent via email.
+                  Used to dispatch results. The Telegram deep link can also be sent via email.
                 </p>
                 <Input
                   type="email"
@@ -615,10 +615,10 @@ export default function ParentsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                  <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.9l-2.965-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.963.659z"/>
                   </svg>
-                  Phone Number
+                  Telegram Phone Number
                 </label>
                 <Input
                   type="tel"
@@ -627,7 +627,7 @@ export default function ParentsPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   className="h-11"
                 />
-                <p className="text-xs text-slate-500">Required for Telegram bot phone verification. Include country code.</p>
+                <p className="text-xs text-slate-500">The phone number this parent uses on Telegram. This is how they verify their identity with the bot. Include country code (e.g., +234 for Nigeria).</p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
@@ -643,7 +643,7 @@ export default function ParentsPage() {
                   onChange={(e) => setWhatsappNo(e.target.value)}
                   className="h-11"
                 />
-                <p className="text-xs text-slate-500">Include country code (e.g., +234 for Nigeria)</p>
+                <p className="text-xs text-slate-500">Used for WhatsApp result notifications. Include country code (e.g., +234 for Nigeria).</p>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button
@@ -702,7 +702,7 @@ export default function ParentsPage() {
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
                     <TableHead className="font-semibold text-slate-700">Parent Type</TableHead>
                     <TableHead className="font-semibold text-slate-700">Email</TableHead>
-                    <TableHead className="font-semibold text-slate-700">Phone</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Telegram Phone</TableHead>
                     <TableHead className="font-semibold text-slate-700">Telegram</TableHead>
                     <TableHead className="font-semibold text-slate-700">WhatsApp</TableHead>
                     <TableHead className="font-semibold text-slate-700">Telegram Link</TableHead>

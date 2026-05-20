@@ -125,12 +125,14 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}))
     const { level, semester, session } = body
 
-    // Invoke the fetch-portal-data function
+    // Invoke the fetch-portal-data function as a trusted internal service call.
+    // Pass the cron secret as x-cron-secret (NOT the service role key as a user JWT)
+    const cronSecretHeader = expectedCronSecret
     const response = await fetch(`${supabaseUrl}/functions/v1/fetch-portal-data`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseServiceKey}`,
+        "x-cron-secret": cronSecretHeader,
       },
       body: JSON.stringify({ level, semester, session }),
     })

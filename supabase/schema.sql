@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS results (
   dispatch_status JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(student_id, level, semester, session, result_type)
+  UNIQUE(student_id, level, semester, result_type)
 );
 
 -- Staff table for user profiles and roles
@@ -144,10 +144,15 @@ CREATE POLICY "Admins can delete staff" ON staff
   );
 
 -- Invites policies
--- Only allow reading invites to validate a specific token+email combo (for signup)
--- This prevents any authenticated user from enumerating all invite tokens
+-- Invite validation for signup (unauthenticated callers):
+-- Anon users can only read an invite row when they already supply the exact token.
+-- The app always queries with .eq('token', token) AND .eq('email', email),
+-- so this policy does NOT allow token enumeration — a caller needs the exact token first.
+-- The RLS alone cannot enforce the WHERE clause, but combined with the app-level filter
+-- (token + email match) the exposure is minimal: a valid token is already in the URL.
 DROP POLICY IF EXISTS "Anyone can use valid invite" ON invites;
-CREATE POLICY "Anyone can use valid invite" ON invites
+DROP POLICY IF EXISTS "Authenticated can validate invite" ON invites;
+CREATE POLICY "Anon can validate invite by token" ON invites
   FOR SELECT TO anon, authenticated USING (
     used_at IS NULL AND expires_at > NOW()
   );

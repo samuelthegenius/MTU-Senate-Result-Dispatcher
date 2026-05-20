@@ -510,30 +510,37 @@ serve(async (req: Request) => {
       })
     }
 
-    // Get user JWT from Authorization header
-    const authHeader = req.headers.get("authorization")
-    const userJwt = authHeader?.replace("Bearer ", "")
+    // Allow trusted service-to-service calls via cron secret (from scheduled-portal-sync)
+    const incomingCronSecret = req.headers.get("x-cron-secret")
+    const expectedCronSecret = Deno.env.get("CRON_SECRET")
+    const isTrustedServiceCall = expectedCronSecret && incomingCronSecret === expectedCronSecret
 
-    if (!userJwt) {
-      return new Response(JSON.stringify({ error: "Missing authorization header" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    if (!isTrustedServiceCall) {
+      // Fall back to user JWT authentication
+      const authHeader = req.headers.get("authorization")
+      const userJwt = authHeader?.replace("Bearer ", "")
+
+      if (!userJwt) {
+        return new Response(JSON.stringify({ error: "Missing authorization header" }), {
+          status: 401,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        })
+      }
+
+      // Validate user
+      const supabaseUserClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${userJwt}` } },
       })
-    }
 
-    // Validate user
-    const supabaseUserClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${userJwt}` } },
-    })
+      const { data: { user }, error: authError } = await supabaseUserClient.auth.getUser()
 
-    const { data: { user }, error: authError } = await supabaseUserClient.auth.getUser()
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      })
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+          status: 401,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        })
+      }
     }
 
     // Use service role client for database operations
@@ -649,6 +656,8 @@ serve(async (req: Request) => {
     const clientErrorMessage = "Portal synchronization failed. Please try again later."
 
     // Try to update sync status if we have a config
+    // Store only a generic error message in the DB — never raw internal details
+    // (portal_config is readable by all authenticated staff, not just admins)
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!
       const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -664,7 +673,7 @@ serve(async (req: Request) => {
           .from("portal_config")
           .update({
             last_sync_status: "error",
-            last_sync_message: detailedError,
+            last_sync_message: "Sync failed. Check server logs for details.",
             updated_at: new Date().toISOString(),
           })
           .eq("id", configRow.id)

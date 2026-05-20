@@ -134,15 +134,21 @@ serve(async (req: Request) => {
       throw new Error("TELEGRAM_BOT_TOKEN not configured")
     }
 
-    // Validate webhook secret if configured (protects against fake webhook requests)
-    if (webhookSecret) {
-      const requestSecret = req.headers.get("X-Telegram-Bot-Api-Secret-Token")
-      if (requestSecret !== webhookSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        })
-      }
+    // Validate webhook secret to protect against fake/forged webhook requests.
+    // TELEGRAM_WEBHOOK_SECRET must be configured — reject all requests if not set.
+    if (!webhookSecret) {
+      return new Response(JSON.stringify({ error: "Webhook not configured" }), {
+        status: 503,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
+    }
+
+    const requestSecret = req.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if (requestSecret !== webhookSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      })
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey)
