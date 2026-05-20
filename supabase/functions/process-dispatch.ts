@@ -265,9 +265,21 @@ serve(async (req: Request) => {
       if (parentContact.email) {
       try {
         const brevoApiKey = Deno.env.get("BREVO_API_KEY")
-        const brevoFromEmail = Deno.env.get("BREVO_FROM_EMAIL") || "noreply@mtu.edu.ng"
+        const brevoFromEmail = Deno.env.get("BREVO_FROM_EMAIL")
 
-        if (brevoApiKey) {
+        if (!brevoApiKey) {
+          parentStatus.email = {
+            success: false,
+            message: "Brevo API key not configured. Set BREVO_API_KEY in Supabase Edge Function Secrets.",
+            timestamp,
+          }
+        } else if (!brevoFromEmail) {
+          parentStatus.email = {
+            success: false,
+            message: "Brevo from-email not configured. Set BREVO_FROM_EMAIL in Supabase Edge Function Secrets.",
+            timestamp,
+          }
+        } else {
           // Download PDF content for attachment
           const pdfResponse = await fetch(signedUrl)
           if (!pdfResponse.ok) {
@@ -312,9 +324,11 @@ serve(async (req: Request) => {
             }),
           })
 
-          let emailMessage = "Email sent with attachment"
+          let emailMessage = "Email sent"
           if (!emailResponse.ok) {
-            emailMessage = `Email failed: ${emailResponse.status}`
+            const errorBody = await emailResponse.text()
+            console.error("[process-dispatch] Brevo SMTP error:", emailResponse.status, errorBody)
+            emailMessage = `Email failed: ${emailResponse.status} - ${errorBody}`
           }
 
           parentStatus.email = {
@@ -322,13 +336,7 @@ serve(async (req: Request) => {
             message: emailMessage,
             timestamp,
           }
-        } else {
-          parentStatus.email = {
-            success: false,
-            message: "Brevo not configured",
-            timestamp,
-          }
-        }
+        }   // ← end of else (brevoApiKey & brevoFromEmail both present, success path already set above)
       } catch {
         parentStatus.email = {
           success: false,
@@ -493,9 +501,11 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ success: true, status }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     })
-  } catch {
-    return new Response(JSON.stringify({ 
-      error: "Dispatch processing failed"
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("[process-dispatch] Fatal:", errorMessage, error)
+    return new Response(JSON.stringify({
+      error: errorMessage,
     }), {
       status: 500,
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
