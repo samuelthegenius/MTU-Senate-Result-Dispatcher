@@ -17,6 +17,7 @@ interface StudentResult {
   is_senate_approved: boolean
   level: number | null
   semester: number | null
+  gpa: number | null
   cgpa: number | null
   created_at: string
 }
@@ -31,7 +32,7 @@ export default function ResultsPage() {
     const [{ data: resultsData, error: resultsError }, { data: studentsData, error: _studentsError }] = await Promise.all([
       supabase
         .from('results')
-        .select('id, student_id, pdf_url, is_senate_approved, level, semester, cgpa, created_at')
+        .select('id, student_id, pdf_url, is_senate_approved, level, semester, gpa, cgpa, created_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('students')
@@ -60,6 +61,7 @@ export default function ResultsPage() {
         is_senate_approved: r.is_senate_approved,
         level: r.level,
         semester: r.semester,
+        gpa: r.gpa,
         cgpa: r.cgpa,
         created_at: r.created_at,
         matric_no: student?.matric_no ?? 'N/A',
@@ -230,7 +232,7 @@ export default function ResultsPage() {
                     <TableHead className="font-semibold text-slate-700">Matric No.</TableHead>
                     <TableHead className="font-semibold text-slate-700">Student Name</TableHead>
                     <TableHead className="font-semibold text-slate-700">Level/Semester</TableHead>
-                    <TableHead className="font-semibold text-slate-700">CGPA</TableHead>
+                    <TableHead className="font-semibold text-slate-700">GPA / CGPA</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate Status</TableHead>
                     <TableHead className="font-semibold text-slate-700">Upload Date</TableHead>
                     <TableHead className="font-semibold text-slate-700">Actions</TableHead>
@@ -252,7 +254,7 @@ export default function ResultsPage() {
                         {!result.level && !result.semester && 'N/A'}
                       </TableCell>
                       <TableCell className="text-slate-600 font-medium">
-                        {result.cgpa ? result.cgpa.toFixed(2) : '-'}
+                        {result.gpa ? result.gpa.toFixed(2) : '-'} / {result.cgpa ? result.cgpa.toFixed(2) : '-'}
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${

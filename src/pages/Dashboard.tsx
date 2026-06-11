@@ -794,7 +794,7 @@ export default function DashboardPage() {
             Upload Result PDFs
           </CardTitle>
           <CardDescription>
-            Drag and drop PDF files or click to browse. Naming: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S1.pdf</code> (1st sem), <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_S2.pdf</code> (2nd sem), <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">19010301081_400_SUP.pdf</code> (supplementary)
+            Drag and drop PDF files or click to browse. The system will automatically extract the Matric Number, Level, Semester, and GPA from the document.
           </CardDescription>
         </CardHeader>
         <CardContent>
