@@ -369,24 +369,17 @@ You are set up to receive results for <b>${studentName}</b>.
 
       const digitPatterns = [...new Set([intlDigits, localDigits])]
 
-      // DEBUG: log what we received and what we're searching for
-      console.log("[DEBUG] Contact shared. phoneRaw:", phoneRaw)
-      console.log("[DEBUG] phoneDigits:", phoneDigits)
-      console.log("[DEBUG] digitPatterns:", JSON.stringify(digitPatterns))
-
       const selectFields = "id, student_id, parent_type, email, phone, whatsapp_no, telegram_chat_id, verification_token, student:student_id(full_name, matric_no)"
 
       let parentContact: ParentContact | null = null
 
       for (const digits of digitPatterns) {
         for (const column of ["phone", "whatsapp_no"]) {
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from("parent_contacts")
             .select(selectFields)
             .ilike(column, `%${digits}%`)
             .limit(1)
-
-          console.log(`[DEBUG] ilike ${column} %${digits}%:`, JSON.stringify(data), "error:", JSON.stringify(error))
 
           if (data && data.length > 0) {
             parentContact = data[0] as ParentContact

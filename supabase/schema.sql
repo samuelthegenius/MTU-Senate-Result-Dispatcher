@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS results (
   session VARCHAR(20), -- e.g., "2023/2024", "2024/2025"
   result_type TEXT DEFAULT 'regular' CHECK (result_type IN ('regular', 'supplementary')), -- regular or supplementary/resit
   cgpa NUMERIC(3,2), -- e.g., 4.50, 3.75
+  gpa NUMERIC(3,2), -- e.g., 4.50, 3.75
   is_senate_approved BOOLEAN DEFAULT FALSE,
   dispatch_status JSONB DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),

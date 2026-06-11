@@ -20,6 +20,7 @@ interface Result {
   session?: string
   result_type?: 'regular' | 'supplementary'
   cgpa?: number
+  gpa?: number
   is_senate_approved: boolean
   student: Student
 }
@@ -88,7 +89,7 @@ function getOrdinalSuffix(n: number): string {
 }
 
 // Helper function to build result details string
-function buildResultDetails(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number): string {
+function buildResultDetails(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number, gpa?: number): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: ${student.programme}`)
@@ -105,6 +106,9 @@ function buildResultDetails(student: Student, level?: number, semester?: number,
   if (session) {
     parts.push(`Session: ${session}`)
   }
+  if (gpa !== undefined && gpa !== null) {
+    parts.push(`GPA: ${gpa.toFixed(2)}`)
+  }
   if (cgpa !== undefined && cgpa !== null) {
     parts.push(`CGPA: ${cgpa.toFixed(2)}`)
   }
@@ -115,7 +119,7 @@ function buildResultDetails(student: Student, level?: number, semester?: number,
 }
 
 // Helper function to build result details for HTML
-function buildResultDetailsHTML(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number): string {
+function buildResultDetailsHTML(student: Student, level?: number, semester?: number, resultType?: string, session?: string, cgpa?: number, gpa?: number): string {
   const parts: string[] = []
   if (student.programme) {
     parts.push(`Programme: <strong>${student.programme}</strong>`)
@@ -131,6 +135,9 @@ function buildResultDetailsHTML(student: Student, level?: number, semester?: num
   }
   if (session) {
     parts.push(`Session: <strong>${session}</strong>`)
+  }
+  if (gpa !== undefined && gpa !== null) {
+    parts.push(`GPA: <strong>${gpa.toFixed(2)}</strong>`)
   }
   if (cgpa !== undefined && cgpa !== null) {
     parts.push(`CGPA: <strong>${cgpa.toFixed(2)}</strong>`)
@@ -205,6 +212,7 @@ serve(async (req: Request) => {
         session,
         result_type,
         cgpa,
+        gpa,
         is_senate_approved,
         student:students (id, matric_no, full_name, programme, level)
       `)
@@ -299,8 +307,8 @@ serve(async (req: Request) => {
           
           const fileName = bucketPath.split('/').pop() || `${student.matric_no}_result.pdf`
 
-          const resultDetails = buildResultDetails(student, result.level, result.semester, result.result_type, result.session, result.cgpa)
-          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester, result.result_type, result.session, result.cgpa)
+          const resultDetails = buildResultDetails(student, result.level, result.semester, result.result_type, result.session, result.cgpa, result.gpa)
+          const resultDetailsHTML = buildResultDetailsHTML(student, result.level, result.semester, result.result_type, result.session, result.cgpa, result.gpa)
 
           const emailResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
@@ -371,7 +379,8 @@ serve(async (req: Request) => {
           if (result.level) telegramDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) telegramDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
           if (result.session) telegramDetails.push(`📆 Session: ${result.session}`)
-          if (result.cgpa !== undefined && result.cgpa !== null) telegramDetails.push(`⭐ CGPA: <b>${result.cgpa.toFixed(2)}</b>`)
+          if (result.gpa !== undefined && result.gpa !== null) telegramDetails.push(`⭐ GPA: <b>${result.gpa.toFixed(2)}</b>`)
+          if (result.cgpa !== undefined && result.cgpa !== null) telegramDetails.push(`🌟 CGPA: <b>${result.cgpa.toFixed(2)}</b>`)
           if (result.result_type === 'supplementary') telegramDetails.push(`⚠️ <b>Supplementary/Resit</b>`)
 
           // Create multipart form data - standard Telegram sendDocument
@@ -440,7 +449,8 @@ serve(async (req: Request) => {
           if (result.level) whatsappDetails.push(`📊 Result for: ${result.level}L`)
           if (result.semester) whatsappDetails.push(`📅 Semester: ${result.semester}${getOrdinalSuffix(result.semester)}`)
           if (result.session) whatsappDetails.push(`📆 Session: ${result.session}`)
-          if (result.cgpa !== undefined && result.cgpa !== null) whatsappDetails.push(`⭐ CGPA: *${result.cgpa.toFixed(2)}*`)
+          if (result.gpa !== undefined && result.gpa !== null) whatsappDetails.push(`⭐ GPA: *${result.gpa.toFixed(2)}*`)
+          if (result.cgpa !== undefined && result.cgpa !== null) whatsappDetails.push(`🌟 CGPA: *${result.cgpa.toFixed(2)}*`)
           if (result.result_type === 'supplementary') whatsappDetails.push(`⚠️ *Supplementary/Resit*`)
 
           // Upload PDF to Green API first, then send

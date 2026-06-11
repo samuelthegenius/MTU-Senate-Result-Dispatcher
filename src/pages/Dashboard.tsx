@@ -26,6 +26,7 @@ import {
   CloudOff
 } from 'lucide-react'
 import type { ResultWithDetails } from '@/types'
+import { parsePdfResult } from '@/lib/pdfParser'
 
 interface StudentResult extends ResultWithDetails {
   full_name: string
@@ -58,6 +59,8 @@ interface UploadResult {
   level?: number
   semester?: number
   resultType?: 'regular' | 'supplementary'
+  cgpa?: number
+  gpa?: number
   error?: string
 }
 
@@ -414,10 +417,30 @@ export default function DashboardPage() {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      const parseResult = parseMatricFromFilename(file.name)
+      
+      // Parse PDF content first
+      const arrayBuffer = await file.arrayBuffer()
+      const parsedData = await parsePdfResult(arrayBuffer)
+      
+      let parseResult: UploadResult
+      
+      if (parsedData.success && parsedData.matricNo) {
+        parseResult = {
+          success: true,
+          matricNo: parsedData.matricNo,
+          level: parsedData.level,
+          semester: parsedData.semester,
+          cgpa: parsedData.cgpa,
+          gpa: parsedData.gpa,
+          resultType: file.name.toUpperCase().includes('_SUP') ? 'supplementary' : 'regular'
+        }
+      } else {
+        // Fallback to filename parsing
+        parseResult = parseMatricFromFilename(file.name)
+      }
 
       if (!parseResult.success) {
-        const errorMsg = parseResult.error || 'Invalid filename'
+        const errorMsg = parseResult.error || 'Invalid filename and failed to parse PDF'
         setUploadProgress(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error', progress: 100, message: errorMsg } : p))
         errors.push(`${file.name}: ${errorMsg}`)
         continue
@@ -463,6 +486,8 @@ export default function DashboardPage() {
         level: parseResult.level || null,
         semester: parseResult.semester || null,
         result_type: parseResult.resultType || 'regular',
+        cgpa: parseResult.cgpa || null,
+        gpa: parseResult.gpa || null,
         is_senate_approved: false,
         dispatch_status: null,
       }, { onConflict: 'student_id,level,semester,result_type' })
