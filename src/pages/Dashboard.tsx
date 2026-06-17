@@ -23,8 +23,12 @@ import {
   Inbox,
   Ban,
   Cloud,
-  CloudOff
+  CloudOff,
+  Search,
+  Filter,
+  RefreshCw
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import type { ResultWithDetails } from '@/types'
 import { parsePdfResult } from '@/lib/pdfParser'
 
@@ -225,9 +229,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [approving, setApproving] = useState(false)
+  const [retrying, setRetrying] = useState<Set<string>>(new Set())
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([])
   const [portalConfig, setPortalConfig] = useState<PortalConfig | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'dispatched' | 'failed'>('all')
 
   const fetchPortalConfig = useCallback(async () => {
     try {
@@ -536,11 +543,15 @@ export default function DashboardPage() {
   }
 
   const selectAll = () => {
-    if (selectedIds.size === results.length) {
-      setSelectedIds(new Set())
+    const visibleIds = filteredResults.map(r => r.id)
+    const allVisibleSelected = visibleIds.every(id => selectedIds.has(id))
+    const newSelected = new Set(selectedIds)
+    if (allVisibleSelected) {
+      visibleIds.forEach(id => newSelected.delete(id))
     } else {
-      setSelectedIds(new Set(results.map(r => r.id)))
+      visibleIds.forEach(id => newSelected.add(id))
     }
+    setSelectedIds(newSelected)
   }
 
   const handleApprove = async () => {
@@ -661,6 +672,31 @@ export default function DashboardPage() {
     }
   }
 
+  const handleRetry = async (id: string) => {
+    setRetrying(prev => new Set(prev).add(id))
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+
+    try {
+      const { error } = await supabase.functions.invoke('process-dispatch', {
+        body: { resultId: id },
+        headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : undefined
+      })
+
+      if (error) {
+        toast({ title: 'Retry failed', description: error.message || 'Dispatch error', variant: 'destructive' })
+      } else {
+        toast({ title: 'Retry successful', description: 'Result re-dispatched successfully.', variant: 'success' })
+        await fetchResults()
+      }
+    } catch (e: any) {
+      toast({ title: 'Retry failed', description: e.message || 'Network error', variant: 'destructive' })
+    }
+
+    setRetrying(prev => { const n = new Set(prev); n.delete(id); return n })
+  }
+
   const getChannelStatus = (status: any, channel: string) => {
     if (!status) return 'pending'
 
@@ -691,11 +727,28 @@ export default function DashboardPage() {
   }
 
   const StatusIcon = ({ status }: { status: string }) => {
-    if (status === 'pending') return <Clock className="h-4 w-4 text-slate-300" />
-    if (status === 'success') return <CheckCircle2 className="h-4 w-4 text-mtu-green" />
-    if (status === 'failed') return <XCircle className="h-4 w-4 text-red-500" />
+    if (status === 'pending') return <Clock className="h-3.5 w-3.5 text-slate-300" />
+    if (status === 'success') return <CheckCircle2 className="h-3.5 w-3.5 text-mtu-green" />
+    if (status === 'failed') return <XCircle className="h-3.5 w-3.5 text-red-500" />
     return null
   }
+
+  const filteredResults = results.filter(r => {
+    const q = searchQuery.toLowerCase()
+    const matchesSearch = !q ||
+      r.matric_no?.toLowerCase().includes(q) ||
+      r.full_name?.toLowerCase().includes(q) ||
+      r.programme?.toLowerCase().includes(q)
+
+    const matchesFilter =
+      filterStatus === 'all' ||
+      (filterStatus === 'pending' && !r.is_senate_approved) ||
+      (filterStatus === 'approved' && r.is_senate_approved) ||
+      (filterStatus === 'dispatched' && isDispatched(r.dispatch_status)) ||
+      (filterStatus === 'failed' && isFailed(r.dispatch_status))
+
+    return matchesSearch && matchesFilter
+  })
 
   return (
     <div className="space-y-8">
@@ -865,33 +918,66 @@ export default function DashboardPage() {
 
       {/* Results Table */}
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CheckCheck className="h-5 w-5 text-mtu-green" />
-              Result Management
-            </CardTitle>
-            <CardDescription className="mt-1">
-              Select results for senate approval and dispatch
-            </CardDescription>
+        <CardHeader className="pb-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CheckCheck className="h-5 w-5 text-mtu-green" />
+                Result Management
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Select results for senate approval and dispatch
+              </CardDescription>
+            </div>
+            <Button
+              onClick={handleApprove}
+              disabled={approving || selectedIds.size === 0}
+              className="bg-mtu-green hover:bg-mtu-green-dark text-white shadow-md shrink-0"
+            >
+              {approving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Send className="h-4 w-4" />
+                  Approve & Dispatch ({selectedIds.size})
+                </span>
+              )}
+            </Button>
           </div>
-          <Button
-            onClick={handleApprove}
-            disabled={approving || selectedIds.size === 0}
-            className="bg-mtu-green hover:bg-mtu-green-dark text-white shadow-md"
-          >
-            {approving ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Processing...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Send className="h-4 w-4" />
-                Approve & Dispatch ({selectedIds.size})
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name, matric no., or programme..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 border-slate-200 text-sm"
+              />
+            </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}
+                className="pl-9 pr-4 h-9 text-sm border border-slate-200 rounded-md bg-white text-slate-700 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-mtu-green/20 focus:border-mtu-green"
+              >
+                <option value="all">All Results</option>
+                <option value="pending">Pending Approval</option>
+                <option value="approved">Senate Approved</option>
+                <option value="dispatched">Dispatched</option>
+                <option value="failed">Failed Dispatch</option>
+              </select>
+            </div>
+            {(searchQuery || filterStatus !== 'all') && (
+              <span className="flex items-center text-xs text-slate-500 shrink-0">
+                {filteredResults.length} of {results.length} results
               </span>
             )}
-          </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -905,7 +991,7 @@ export default function DashboardPage() {
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
                     <TableHead className="w-12 border-b">
                       <Checkbox
-                        checked={selectedIds.size === results.length && results.length > 0}
+                        checked={filteredResults.length > 0 && filteredResults.every(r => selectedIds.has(r.id))}
                         onCheckedChange={selectAll}
                       />
                     </TableHead>
@@ -917,13 +1003,11 @@ export default function DashboardPage() {
                     <TableHead className="font-semibold text-slate-700">Type</TableHead>
                     <TableHead className="font-semibold text-slate-700">PDF</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate</TableHead>
-                    <TableHead className="font-semibold text-slate-700 text-center">Email</TableHead>
-                    <TableHead className="font-semibold text-slate-700 text-center">Telegram</TableHead>
-                    <TableHead className="font-semibold text-slate-700 text-center">WhatsApp</TableHead>
+                    <TableHead className="font-semibold text-slate-700 text-center">Dispatch</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((result) => (
+                  {filteredResults.map((result) => (
                     <TableRow key={result.id} className="hover:bg-slate-50/50">
                       <TableCell>
                         <Checkbox
@@ -972,25 +1056,45 @@ export default function DashboardPage() {
                         />
                       </TableCell>
                       <TableCell className="text-center">
-                        <StatusIcon status={getChannelStatus(result.dispatch_status, 'email')} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <StatusIcon status={getChannelStatus(result.dispatch_status, 'telegram')} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <StatusIcon status={getChannelStatus(result.dispatch_status, 'whatsapp')} />
+                        <div className="inline-flex items-center gap-2 justify-center">
+                          <span title="Email">
+                            <StatusIcon status={getChannelStatus(result.dispatch_status, 'email')} />
+                          </span>
+                          <span title="Telegram">
+                            <StatusIcon status={getChannelStatus(result.dispatch_status, 'telegram')} />
+                          </span>
+                          <span title="WhatsApp">
+                            <StatusIcon status={getChannelStatus(result.dispatch_status, 'whatsapp')} />
+                          </span>
+                          {result.is_senate_approved && isFailed(result.dispatch_status) && (
+                            <button
+                              title="Retry dispatch"
+                              disabled={retrying.has(result.id)}
+                              onClick={() => handleRetry(result.id)}
+                              className="ml-1 p-1 rounded hover:bg-amber-50 text-amber-500 hover:text-amber-600 disabled:opacity-40"
+                            >
+                              {retrying.has(result.id)
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <RefreshCw className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {results.length === 0 && (
+                  {filteredResults.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-12">
+                      <TableCell colSpan={10} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />
                           </div>
-                          <p className="text-slate-500 font-medium">No results found</p>
-                          <p className="text-sm text-slate-400">Upload PDF files to get started</p>
+                          <p className="text-slate-500 font-medium">
+                            {results.length === 0 ? 'No results found' : 'No matching results'}
+                          </p>
+                          <p className="text-sm text-slate-400">
+                            {results.length === 0 ? 'Upload PDF files to get started' : 'Try adjusting your search or filter'}
+                          </p>
                         </div>
                       </TableCell>
                     </TableRow>

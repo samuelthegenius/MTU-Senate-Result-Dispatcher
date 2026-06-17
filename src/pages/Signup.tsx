@@ -8,12 +8,19 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Loader2, CheckCircle2, UserPlus, ArrowRight } from 'lucide-react'
+import { Loader2, CheckCircle2, UserPlus, ArrowRight, Eye, EyeOff } from 'lucide-react'
 
 export default function SignupPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
   const navigate = useNavigate()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const { toast } = useToast()
 
   // Redirect to login if no invitation token
   useEffect(() => {
@@ -26,13 +33,6 @@ export default function SignupPage() {
   if (!token) {
     return null
   }
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,8 +48,8 @@ export default function SignupPage() {
       return
     }
 
-    const emailDomain = email.split('@')[1]
-    if (emailDomain !== 'mtu.edu.ng') {
+    const emailDomain = email.trim().toLowerCase().split('@')[1]
+    if (!emailDomain || emailDomain !== 'mtu.edu.ng') {
       toast({
         title: 'Invalid email',
         description: 'Only @mtu.edu.ng emails are allowed.',
@@ -252,16 +252,26 @@ export default function SignupPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-slate-700 font-medium">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a secure password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className="h-11 border-slate-200 focus:border-mtu-green focus:ring-mtu-green/20"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Create a secure password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    className="h-11 pr-11 border-slate-200 focus:border-mtu-green focus:ring-mtu-green/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 <p className="text-xs text-slate-400">
                   Minimum 8 characters required
                 </p>

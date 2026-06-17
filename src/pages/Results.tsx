@@ -5,8 +5,9 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Loader2, FileText, Inbox, ExternalLink, Download, Trash2 } from 'lucide-react'
+import { Loader2, FileText, Inbox, ExternalLink, Download, Trash2, Search, FileDown, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface StudentResult {
   id: string
@@ -19,12 +20,14 @@ interface StudentResult {
   semester: number | null
   gpa: number | null
   cgpa: number | null
+  dispatch_status: any
   created_at: string
 }
 
 export default function ResultsPage() {
   const [results, setResults] = useState<StudentResult[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
 
   const fetchResults = useCallback(async () => {
@@ -32,7 +35,7 @@ export default function ResultsPage() {
     const [{ data: resultsData, error: resultsError }, { data: studentsData, error: _studentsError }] = await Promise.all([
       supabase
         .from('results')
-        .select('id, student_id, pdf_url, is_senate_approved, level, semester, gpa, cgpa, created_at')
+        .select('id, student_id, pdf_url, is_senate_approved, level, semester, gpa, cgpa, dispatch_status, created_at')
         .order('created_at', { ascending: false }),
       supabase
         .from('students')
@@ -63,6 +66,7 @@ export default function ResultsPage() {
         semester: r.semester,
         gpa: r.gpa,
         cgpa: r.cgpa,
+        dispatch_status: r.dispatch_status,
         created_at: r.created_at,
         matric_no: student?.matric_no ?? 'N/A',
         full_name: student?.full_name ?? 'Unknown Student',
@@ -152,6 +156,9 @@ export default function ResultsPage() {
     try {
       // Fetch the file as a blob to create a same-origin URL
       const response = await fetch(data.signedUrl)
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`)
+      }
       const blob = await response.blob()
       const blobUrl = URL.createObjectURL(blob)
 
@@ -198,6 +205,53 @@ export default function ResultsPage() {
     }
   }
 
+  const filteredResults = results.filter(r => {
+    const q = searchQuery.toLowerCase()
+    return !q || r.matric_no.toLowerCase().includes(q) || r.full_name.toLowerCase().includes(q)
+  })
+
+  const getOverallDispatchStatus = (status: any) => {
+    if (!status) return 'pending'
+    let hasSuccess = false
+    let hasAttempt = false
+    for (const pt of ['father', 'mother', 'parent']) {
+      const ps = status[pt]
+      if (ps) {
+        hasAttempt = true
+        if (ps.email?.success || ps.telegram?.success || ps.whatsapp?.success) hasSuccess = true
+      }
+    }
+    if (status.email || status.telegram || status.whatsapp) {
+      hasAttempt = true
+      if (status.email?.success || status.telegram?.success || status.whatsapp?.success) hasSuccess = true
+    }
+    if (!hasAttempt) return 'pending'
+    return hasSuccess ? 'success' : 'failed'
+  }
+
+  const handleExportCSV = () => {
+    const headers = ['Matric No.', 'Student Name', 'Level', 'Semester', 'GPA', 'CGPA', 'Senate Status', 'Dispatch Status', 'Upload Date']
+    const rows = filteredResults.map(r => [
+      r.matric_no,
+      r.full_name,
+      r.level ? `${r.level}L` : '',
+      r.semester ?? '',
+      r.gpa != null ? r.gpa.toFixed(2) : '',
+      r.cgpa != null ? r.cgpa.toFixed(2) : '',
+      r.is_senate_approved ? 'Approved' : 'Pending',
+      getOverallDispatchStatus(r.dispatch_status),
+      new Date(r.created_at).toLocaleDateString(),
+    ])
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `results_export_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -210,14 +264,37 @@ export default function ResultsPage() {
 
       {/* Results Table */}
       <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-mtu-green" />
-            All Results
-          </CardTitle>
-          <CardDescription>
-            List of all result PDFs in the system
-          </CardDescription>
+        <CardHeader className="pb-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileText className="h-5 w-5 text-mtu-green" />
+                All Results
+              </CardTitle>
+              <CardDescription className="mt-1">
+                List of all result PDFs in the system
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              disabled={filteredResults.length === 0}
+              className="shrink-0 border-slate-200 text-slate-700 hover:bg-slate-50"
+            >
+              <FileDown className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search by name or matric no..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 border-slate-200 text-sm"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -234,12 +311,13 @@ export default function ResultsPage() {
                     <TableHead className="font-semibold text-slate-700">Level/Semester</TableHead>
                     <TableHead className="font-semibold text-slate-700">GPA / CGPA</TableHead>
                     <TableHead className="font-semibold text-slate-700">Senate Status</TableHead>
+                    <TableHead className="font-semibold text-slate-700">Dispatch</TableHead>
                     <TableHead className="font-semibold text-slate-700">Upload Date</TableHead>
                     <TableHead className="font-semibold text-slate-700">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {results.map((result) => (
+                  {filteredResults.map((result) => (
                     <TableRow key={result.id} className="hover:bg-slate-50/50">
                       <TableCell className="font-mono text-sm text-slate-600">
                         {result.matric_no}
@@ -250,7 +328,7 @@ export default function ResultsPage() {
                       <TableCell className="text-slate-600 text-sm">
                         {result.level ? `${result.level}L` : '-'}
                         {result.level && result.semester ? ' / ' : ''}
-                        {result.semester ? `${result.semester}st Sem` : '-'}
+                        {result.semester ? `${result.semester}${result.semester === 1 ? 'st' : result.semester === 2 ? 'nd' : result.semester === 3 ? 'rd' : 'th'} Sem` : '-'}
                         {!result.level && !result.semester && 'N/A'}
                       </TableCell>
                       <TableCell className="text-slate-600 font-medium">
@@ -264,6 +342,26 @@ export default function ResultsPage() {
                         }`}>
                           {result.is_senate_approved ? 'Approved' : 'Pending'}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const ds = getOverallDispatchStatus(result.dispatch_status)
+                          if (ds === 'success') return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-mtu-green-100 text-mtu-green-dark">
+                              <CheckCircle2 className="h-3 w-3" /> Sent
+                            </span>
+                          )
+                          if (ds === 'failed') return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600">
+                              <XCircle className="h-3 w-3" /> Failed
+                            </span>
+                          )
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-400">
+                              <Clock className="h-3 w-3" /> Pending
+                            </span>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell className="text-slate-600 text-sm">
                         {new Date(result.created_at).toLocaleDateString()}
@@ -304,15 +402,19 @@ export default function ResultsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {results.length === 0 && (
+                  {filteredResults.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
                             <Inbox className="h-6 w-6 text-slate-400" />
                           </div>
-                          <p className="text-slate-500 font-medium">No results found</p>
-                          <p className="text-sm text-slate-400">Upload PDF files from the Dashboard</p>
+                          <p className="text-slate-500 font-medium">
+                            {results.length === 0 ? 'No results found' : 'No matching results'}
+                          </p>
+                          <p className="text-sm text-slate-400">
+                            {results.length === 0 ? 'Upload PDF files from the Dashboard' : 'Try adjusting your search'}
+                          </p>
                         </div>
                       </TableCell>
                     </TableRow>
